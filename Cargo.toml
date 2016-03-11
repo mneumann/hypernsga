@@ -1,0 +1,29 @@
+[package]
+name = "hypernsga"
+version = "0.0.1"
+authors = ["Michael Neumann <mneumann@ntecs.de>"]
+license = "MIT"
+repository = "https://github.com/mneumann/hypernsga"
+description = "Hyper-cube based neural network optimization using NSGA2"
+keywords = ["evolution", "neuro", "net", "algorithm", "cppn"]
+
+include = ["src/*.rs", "Cargo.toml", "LICENSE", "README.md"]
+
+[dependencies]
+
+rand = "0.3"
+rayon = { git = "https://github.com/nikomatsakis/rayon" }
+fixedbitset = "0.1.0"
+log = "0.3.5"
+cppn = {git = "https://github.com/mneumann/cppn-rs"}
+acyclic-network = {git = "https://github.com/mneumann/acyclic-network-rs"}
+closed01 = "0.4"
+
+[dev-dependencies]
+
+graph-neighbor-matching = "0.6.1"
+graph-io-gml = "0.1"
+petgraph = "0.2"
+asexp = "0.3"
+env_logger = "0.3.2"
+criterion-stats = "0.1.0"
