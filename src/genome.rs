@@ -17,7 +17,10 @@ pub struct Genome<NT: NodeType> {
 
 impl<NT: NodeType> Genome<NT> {
     pub fn new() -> Self {
-        Genome { network: Network::new(), protected_nodes: 0 }
+        Genome {
+            network: Network::new(),
+            protected_nodes: 0,
+        }
     }
 
     pub fn protect_nodes(&mut self) {
@@ -59,10 +62,7 @@ impl<NT: NodeType> Genome<NT> {
         self.network.node_count()
     }
 
-    fn random_node<R>(&self,
-                      tournament_k: usize,
-                      rng: &mut R)
-                      -> Option<NodeIndex>
+    fn random_node<R>(&self, tournament_k: usize, rng: &mut R) -> Option<NodeIndex>
         where R: Rng
     {
         assert!(tournament_k > 0);
@@ -140,10 +140,7 @@ impl<NT: NodeType> Genome<NT> {
     ///
     /// We choose `tournament_k` random nodes and remove the one with the smallest degree.
 
-    pub fn mutate_drop_node<R>(&mut self,
-                               tournament_k: usize,
-                               rng: &mut R)
-                               -> bool
+    pub fn mutate_drop_node<R>(&mut self, tournament_k: usize, rng: &mut R) -> bool
         where R: Rng
     {
         match self.random_node(tournament_k, rng) {
