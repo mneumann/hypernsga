@@ -5,7 +5,7 @@ use rand::Rng;
 
 /// Genome representing a feed-forward (acyclic) network with node type `NT`.
 #[derive(Clone, Debug)]
-pub struct Genome<NT: NodeType> {
+pub struct CppnGenome<NT: NodeType> {
     /// Represents the acyclic feed forward network, with `NT` as node type and `Weight` for the edge weights.
     /// Other than that, nodes and edges do not have any further associated information (`()`).
     network: Network<NT, Weight, ()>,
@@ -15,9 +15,9 @@ pub struct Genome<NT: NodeType> {
     protected_nodes: usize,
 }
 
-impl<NT: NodeType> Genome<NT> {
+impl<NT: NodeType> CppnGenome<NT> {
     pub fn new() -> Self {
-        Genome {
+        CppnGenome {
             network: Network::new(),
             protected_nodes: 0,
         }
