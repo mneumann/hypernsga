@@ -43,9 +43,10 @@ impl<NT: NodeType> Genome<NT> {
     }
 
     fn random_node<R>(&self,
-                      protected_nodes: usize, 
+                      protected_nodes: usize,
                       tournament_k: usize,
-                      rng: &mut R) -> Option<NodeIndex>
+                      rng: &mut R)
+                      -> Option<NodeIndex>
         where R: Rng
     {
         assert!(tournament_k > 0);
@@ -60,7 +61,7 @@ impl<NT: NodeType> Genome<NT> {
         for _ in 1..tournament_k {
             let node_idx = NodeIndex::new(rng.gen_range(protected_nodes, n));
             let degree = self.network.node(node_idx).degree();
-            if  degree < min_degree {
+            if degree < min_degree {
                 min_node = node_idx;
                 min_degree = degree;
             }
@@ -77,10 +78,10 @@ impl<NT: NodeType> Genome<NT> {
     /// this panics!
 
     pub fn mutate_add_node<R>(&mut self,
-                                 node_type: NT,
-                                 second_link_weight: Option<Weight>,
-                                 rng: &mut R)
-                                 -> bool
+                              node_type: NT,
+                              second_link_weight: Option<Weight>,
+                              rng: &mut R)
+                              -> bool
         where R: Rng
     {
         let link_index = match self.network.random_link_index(rng) {
@@ -90,7 +91,9 @@ impl<NT: NodeType> Genome<NT> {
 
         let (orig_source_node, orig_target_node, orig_weight) = {
             let link = self.network.link(link_index);
-            (link.source_node_index(), link.target_node_index(), link.weight())
+            (link.source_node_index(),
+             link.target_node_index(),
+             link.weight())
         };
 
         // remove original link
@@ -106,8 +109,10 @@ impl<NT: NodeType> Genome<NT> {
         // Ideally this is of full strength as we want to make the modification
         // to the network (CPPN) as little as possible.
 
-        self.add_link(orig_source_node, middle_node, orig_weight);  
-        self.add_link(middle_node, orig_target_node, second_link_weight.unwrap_or(orig_weight));  
+        self.add_link(orig_source_node, middle_node, orig_weight);
+        self.add_link(middle_node,
+                      orig_target_node,
+                      second_link_weight.unwrap_or(orig_weight));
 
         return true;
     }
@@ -120,15 +125,14 @@ impl<NT: NodeType> Genome<NT> {
     /// We choose `tournament_k` random nodes and remove the one with the smallest degree.
 
     pub fn mutate_drop_node<R>(&mut self,
-                               protected_nodes: usize, 
+                               protected_nodes: usize,
                                tournament_k: usize,
-                               rng: &mut R) -> bool
+                               rng: &mut R)
+                               -> bool
         where R: Rng
     {
         match self.random_node(protected_nodes, tournament_k, rng) {
-            None => {
-                false
-            }
+            None => false,
             Some(node_idx) => {
                 self.network.remove_node(node_idx);
                 true
@@ -143,16 +147,15 @@ impl<NT: NodeType> Genome<NT> {
     /// We choose from `tournament_k` nodes the one with the smallest degree.
 
     pub fn mutate_modify_node<R>(&mut self,
-                               new_node_type: NT,
-                               protected_nodes: usize, 
-                               tournament_k: usize,
-                               rng: &mut R) -> bool
+                                 new_node_type: NT,
+                                 protected_nodes: usize,
+                                 tournament_k: usize,
+                                 rng: &mut R)
+                                 -> bool
         where R: Rng
     {
         match self.random_node(protected_nodes, tournament_k, rng) {
-            None => {
-                false
-            }
+            None => false,
             Some(node_idx) => {
                 self.network.node_mut(node_idx).set_node_type(new_node_type);
                 true
