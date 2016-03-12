@@ -12,3 +12,4 @@ pub mod prob;
 pub mod mating;
 pub mod fitness;
 pub mod cppn;
+pub mod substrate;
