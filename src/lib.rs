@@ -13,3 +13,4 @@ pub mod mating;
 pub mod fitness;
 pub mod cppn;
 pub mod substrate;
+pub mod behavioral_bitvec;
