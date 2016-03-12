@@ -20,7 +20,7 @@ impl<NT: NodeType> Genome<NT> {
         Genome { network: Network::new(), protected_nodes: 0 }
     }
 
-    pub fn protect_node(&mut self) {
+    pub fn protect_nodes(&mut self) {
         self.protected_nodes = self.network.node_count();
     }
 
