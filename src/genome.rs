@@ -1,5 +1,6 @@
 use acyclic_network::{Network, NodeType, NodeIndex};
-use weight::Weight;
+use weight::{Weight, WeightRange, WeightPerturbanceMethod};
+use prob::Prob;
 use rand::Rng;
 
 /// Genome representing a feed-forward (acyclic) network with node type `NT`.
@@ -40,6 +41,14 @@ impl<NT: NodeType> Genome<NT> {
         debug_assert!(self.network.valid_link(source_node, target_node).is_ok());
 
         let _link_index = self.network.add_link_unordered(source_node, target_node, weight, ());
+    }
+
+    pub fn add_node(&mut self, node_type: NT) -> NodeIndex {
+        self.network.add_node(node_type, ())
+    }
+
+    pub fn node_count(&self) -> usize {
+        self.network.node_count()
     }
 
     fn random_node<R>(&self,
@@ -200,5 +209,42 @@ impl<NT: NodeType> Genome<NT> {
             }
             None => false,
         }
+    }
+
+
+    /// Uniformly modify the weight of links, each with a probability of `mutate_element_prob`. It 
+    /// the genome contains at least one link, it is guaranteed that this method makes a modification.
+    ///
+    /// Returns the number of modifications (if negative, indicates that we used a random link).
+
+    pub fn mutate_weights<R>(&mut self,
+                             mutate_element_prob: Prob,
+                             weight_perturbance: &WeightPerturbanceMethod,
+                             link_weight_range: &WeightRange,
+                             rng: &mut R)
+                             -> isize
+        where R: Rng
+    {
+        let mut modifications = 0;
+
+        self.network.each_link_mut(|link| {
+            if mutate_element_prob.flip(rng) {
+                let new_weight = weight_perturbance.perturb(link.weight(), link_weight_range, rng);
+                link.set_weight(new_weight);
+                modifications += 1;
+            }
+        });
+
+        if modifications == 0 {
+            // Make at least one change to a randomly selected link.
+            if let Some(link_idx) = self.network.random_link_index(rng) {
+                let link = self.network.link_mut(link_idx);
+                let new_weight = weight_perturbance.perturb(link.weight(), link_weight_range, rng);
+                link.set_weight(new_weight);
+                modifications -= 1;
+            }
+        }
+
+        return modifications;
     }
 }

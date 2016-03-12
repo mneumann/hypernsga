@@ -6,3 +6,4 @@ extern crate rand;
 
 pub mod genome;
 pub mod weight;
+pub mod prob;
