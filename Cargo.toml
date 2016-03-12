@@ -21,3 +21,7 @@ nsga2 = {git = "https://github.com/mneumann/nsga2-rs"}
 #pcg = { git = "https://github.com/codahale/pcg.git" }
 hamming = "0.1"
 primal-bit = "0.2.3"
+closed01 = "0.4"
+asexp = "0.3.0"
+graph-io-gml = "0.1.0"
+petgraph = "0.2.3"
