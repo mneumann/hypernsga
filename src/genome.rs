@@ -250,4 +250,10 @@ impl<NT: NodeType> Genome<NT> {
 
         return modifications;
     }
+
+    pub fn crossover_weights<R>(&mut self, _partner: &Self, _rng: &mut R) -> isize
+        where R: Rng
+    {
+        unimplemented!()
+    }
 }
