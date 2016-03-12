@@ -9,11 +9,19 @@ pub struct Genome<NT: NodeType> {
     /// Represents the acyclic feed forward network, with `NT` as node type and `Weight` for the edge weights.
     /// Other than that, nodes and edges do not have any further associated information (`()`).
     network: Network<NT, Weight, ()>,
+
+    /// The genome can contain some nodes which cannot be modified or removed. These are the first
+    /// `protected_nodes` in `network`.
+    protected_nodes: usize,
 }
 
 impl<NT: NodeType> Genome<NT> {
     pub fn new() -> Self {
-        Genome { network: Network::new() }
+        Genome { network: Network::new(), protected_nodes: 0 }
+    }
+
+    pub fn protect_node(&mut self) {
+        self.protected_nodes = self.network.node_count();
     }
 
     /// Returns a reference to the feed forward network.
@@ -52,7 +60,6 @@ impl<NT: NodeType> Genome<NT> {
     }
 
     fn random_node<R>(&self,
-                      protected_nodes: usize,
                       tournament_k: usize,
                       rng: &mut R)
                       -> Option<NodeIndex>
@@ -61,14 +68,14 @@ impl<NT: NodeType> Genome<NT> {
         assert!(tournament_k > 0);
 
         let n = self.network.node_count();
-        if protected_nodes >= n {
+        if self.protected_nodes >= n {
             return None;
         }
 
-        let mut min_node = NodeIndex::new(rng.gen_range(protected_nodes, n));
+        let mut min_node = NodeIndex::new(rng.gen_range(self.protected_nodes, n));
         let mut min_degree = self.network.node(min_node).degree();
         for _ in 1..tournament_k {
-            let node_idx = NodeIndex::new(rng.gen_range(protected_nodes, n));
+            let node_idx = NodeIndex::new(rng.gen_range(self.protected_nodes, n));
             let degree = self.network.node(node_idx).degree();
             if degree < min_degree {
                 min_node = node_idx;
@@ -129,18 +136,17 @@ impl<NT: NodeType> Genome<NT> {
     /// Structural Mutation `DropNode`.
     ///
     /// Choose a random node and remove it. All in and outgoing links to and from that node
-    /// are removed as well. Note that the first `protected_nodes` are not removed!
+    /// are removed as well. Note that the first `protected_nodes` cannot be removed!
     ///
     /// We choose `tournament_k` random nodes and remove the one with the smallest degree.
 
     pub fn mutate_drop_node<R>(&mut self,
-                               protected_nodes: usize,
                                tournament_k: usize,
                                rng: &mut R)
                                -> bool
         where R: Rng
     {
-        match self.random_node(protected_nodes, tournament_k, rng) {
+        match self.random_node(tournament_k, rng) {
             None => false,
             Some(node_idx) => {
                 self.network.remove_node(node_idx);
@@ -152,18 +158,18 @@ impl<NT: NodeType> Genome<NT> {
     /// Structural Mutation `ModifyNode`.
     ///
     /// Choose a random node and change it's type to `new_node_type`.
+    /// Note that protected nodes are not modified.
     ///
     /// We choose from `tournament_k` nodes the one with the smallest degree.
 
     pub fn mutate_modify_node<R>(&mut self,
                                  new_node_type: NT,
-                                 protected_nodes: usize,
                                  tournament_k: usize,
                                  rng: &mut R)
                                  -> bool
         where R: Rng
     {
-        match self.random_node(protected_nodes, tournament_k, rng) {
+        match self.random_node(tournament_k, rng) {
             None => false,
             Some(node_idx) => {
                 self.network.node_mut(node_idx).set_node_type(new_node_type);
