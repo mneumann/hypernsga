@@ -8,3 +8,4 @@ pub mod genome;
 pub mod weight;
 pub mod prob;
 pub mod mating;
+pub mod fitness;
