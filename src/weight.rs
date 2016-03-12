@@ -1,4 +1,4 @@
-use rand::{self, Rng, Closed01};
+use rand::{Rng, Closed01};
 use rand::distributions::{Normal, IndependentSample};
 
 /// Represents a connection weight.
