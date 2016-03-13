@@ -125,5 +125,5 @@ pub trait NetworkBuilder {
                 target_node: &Node<Self::POS, Self::NT>,
                 weight1: f64,
                 weight2: f64);
-    fn graph(self) -> Self::G;
+    fn network(self) -> Self::G;
 }

@@ -16,7 +16,6 @@ use std::marker::PhantomData;
 
 pub type CppnGenome<AF> where AF: ActivationFunction = Genome<CppnNode<AF>>;
 
-
 pub struct NeuronNetworkBuilder;
 
 impl NetworkBuilder for NeuronNetworkBuilder {
@@ -39,12 +38,10 @@ impl NetworkBuilder for NeuronNetworkBuilder {
                 weight2: f64) {
         unimplemented!()
     }
-    fn graph(self) -> Self::G {
+    fn network(self) -> Self::G {
         ()
     }
 }
-
-
 
 const CPPN_OUTPUT_LINK_WEIGHT1: usize = 0;
 const CPPN_OUTPUT_LINK_WEIGHT2: usize = 1;
@@ -220,7 +217,7 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
                                                                 self.link_expression_threshold);
 
         // Evaluate domain specific fitness
-        let domain_fitness = self.domain_fitness.fitness(net_builder.graph());
+        let domain_fitness = self.domain_fitness.fitness(net_builder.network());
 
         Fitness {
             domain_fitness: domain_fitness,
