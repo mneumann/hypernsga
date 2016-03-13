@@ -3,11 +3,15 @@ name = "hypernsga"
 version = "0.0.1"
 dependencies = [
  "acyclic-network 0.0.1 (git+https://github.com/mneumann/acyclic-network-rs)",
+ "asexp 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "closed01 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "cppn 0.0.1 (git+https://github.com/mneumann/cppn-rs)",
+ "graph-io-gml 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "graph-neighbor-matching 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "hamming 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "nsga2 0.0.1 (git+https://github.com/mneumann/nsga2-rs)",
+ "petgraph 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "primal-bit 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.3.14 (registry+https://github.com/rust-lang/crates.io-index)",
  "rayon 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -16,11 +20,16 @@ dependencies = [
 [[package]]
 name = "acyclic-network"
 version = "0.0.1"
-source = "git+https://github.com/mneumann/acyclic-network-rs#b79d5b0068cda9bda4341954a20412aac13debd1"
+source = "git+https://github.com/mneumann/acyclic-network-rs#8c5e5b7d5277e8d3751a075d713c5c719383606f"
 dependencies = [
  "fixedbitset 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.3.14 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "asexp"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "closed01"
@@ -34,7 +43,7 @@ dependencies = [
 [[package]]
 name = "cppn"
 version = "0.0.1"
-source = "git+https://github.com/mneumann/cppn-rs#a663007db6ad6825b2dd55079d99762fe2220c03"
+source = "git+https://github.com/mneumann/cppn-rs#d17d59a5f0adc3b12206ab4862472b9830bac738"
 dependencies = [
  "acyclic-network 0.0.1 (git+https://github.com/mneumann/acyclic-network-rs)",
  "fixedbitset 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -52,6 +61,15 @@ dependencies = [
 name = "fixedbitset"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "graph-io-gml"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "asexp 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "petgraph 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "graph-neighbor-matching"
@@ -112,7 +130,7 @@ dependencies = [
 [[package]]
 name = "nsga2"
 version = "0.0.1"
-source = "git+https://github.com/mneumann/nsga2-rs#790f42cba462c115d288d98f8ea73b72f3557242"
+source = "git+https://github.com/mneumann/nsga2-rs#ae3a18897aaa87ec6b2bb4e3b3e836d06ca996b0"
 dependencies = [
  "rand 0.3.14 (registry+https://github.com/rust-lang/crates.io-index)",
  "rayon 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
