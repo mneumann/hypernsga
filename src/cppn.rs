@@ -214,18 +214,17 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
         let mut cppn = Cppn::new(ind.network());
         let mut net_builder = NETBUILDER::new();
 
-        // let substrate: Substrate<Position3d, Neuron> = Substrate::new();
-        // let cfg = substrate.to_configuration();
-
         let (behavioral_bitvec, connection_cost) = develop_cppn(&mut cppn,
                                                                 &self.substrate_configuration,
                                                                 &mut net_builder,
                                                                 self.link_expression_threshold);
 
-        // XXX: Domain specific fitness
+        // Evaluate domain specific fitness
+        let domain_fitness = self.domain_fitness.fitness(net_builder.graph());
+
         Fitness {
-            domain_fitness: 0.0,
-            behavioral_diversity: 0,
+            domain_fitness: domain_fitness,
+            behavioral_diversity: 0, // will be calculated in `population_metric`
             connection_cost: connection_cost,
             behavioral_bitvec: behavioral_bitvec,
         }
