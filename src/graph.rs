@@ -87,7 +87,7 @@ fn normalize_to_closed01(w: f32, range: (f32, f32)) -> Closed01<f32> {
     }
 }
 
-pub fn load_graph<N, F>(graph_file: &str) -> OwnedGraph<N>
+pub fn load_graph_normalized<N, F>(graph_file: &str) -> OwnedGraph<N>
     where N: Clone + Debug + FromStr<Err = &'static str>
 {
     let graph_s = {
