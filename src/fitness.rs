@@ -6,15 +6,16 @@ use rand::Rng;
 
 /// We use a fitness composed of three objectives. Smaller values are "better".
 
+#[derive(Debug, Clone)]
 pub struct Fitness {
     /// The domain-specific fitness (higher value is better!)
-    domain_fitness: f32,
+    pub domain_fitness: f32,
 
     /// The behavioral diversity of the CPPN (higher value is better!)
-    behavioral_diversity: f32,
+    pub behavioral_diversity: f32,
 
     /// The connection cost of the generated network (smaller value is better!)
-    connection_cost: f32,
+    pub connection_cost: f32,
 }
 
 impl MultiObjective for Fitness {
