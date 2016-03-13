@@ -1,6 +1,7 @@
 use primal_bit::BitVec;
 use hamming;
 
+#[derive(Clone, Debug)]
 pub struct BehavioralBitvec {
     bitvec: BitVec,
     bitpos: usize,

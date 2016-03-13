@@ -1,5 +1,5 @@
 use cppn_ext::cppn::{Cppn, CppnNode};
-use cppn_ext::position::Position;
+use cppn_ext::position::{Position, Position3d};
 use cppn_ext::activation_function::{GeometricActivationFunction, ActivationFunction};
 use weight::{Weight, WeightRange, WeightPerturbanceMethod};
 use substrate::{Substrate, Node};
@@ -11,6 +11,7 @@ use fitness::Fitness;
 use rand::Rng;
 use mating::{MatingMethod, MatingMethodWeights};
 use prob::Prob;
+use neuron::Neuron;
 
 pub type CppnGenome<AF> where AF: ActivationFunction = Genome<CppnNode<AF>>;
 
@@ -22,6 +23,23 @@ pub trait NetworkBuilderVisitor<P, T> where P: Position {
                 weight1: f64,
                 weight2: f64);
 }
+
+pub struct NeuronNetworkBuilder;
+
+impl NetworkBuilderVisitor<Position3d, Neuron> for NeuronNetworkBuilder {
+    fn add_node(&mut self, node: &Node<Position3d, Neuron>, param: f64) {
+        unimplemented!()
+    }
+    fn add_link(&mut self,
+                source_node: &Node<Position3d, Neuron>,
+                target_node: &Node<Position3d, Neuron>,
+                weight1: f64,
+                weight2: f64) {
+        unimplemented!()
+    }
+}
+
+
 
 const CPPN_OUTPUT_LINK_WEIGHT1: usize = 0;
 const CPPN_OUTPUT_LINK_WEIGHT2: usize = 1;
@@ -107,6 +125,9 @@ pub struct CppnDriver {
     mutate_modify_node_tournament_k: usize,
 
     mate_retries: usize,
+
+    link_expression_threshold: f64,
+    // XXX: Substrate
 }
 
 impl CppnDriver {
@@ -155,10 +176,23 @@ impl Driver for CppnDriver {
     }
 
     fn fitness(&self, ind: &Self::IND) -> Self::FIT {
+        let mut cppn = Cppn::new(ind.network());
+        let mut net_builder = NeuronNetworkBuilder;
+
+        let (behavioral_bitvec, connection_cost) = 
+        develop_cppn(&mut cppn,
+                     &Position3d::origin(),
+                     &[], // XXX: nodes
+                     &[], // XXX: links,
+                     &mut net_builder,
+                     self.link_expression_threshold);
+
+        // XXX: Domain specific fitness
         Fitness {
             domain_fitness: 0.0,
-            behavioral_diversity: 0.0,
-            connection_cost: 0.0,
+            behavioral_diversity: 0,
+            connection_cost: connection_cost,
+            behavioral_bitvec: behavioral_bitvec,
         }
     }
 
@@ -207,11 +241,27 @@ impl Driver for CppnDriver {
             if modified { break }
         }
 
-        warn!("mate(): Genome was not modified!");
+        warn!("mate(): Genome was NOT modified!");
 
         return offspring;
     }
 
     fn population_metric(&self, population: &mut RatedPopulation<Self::IND, Self::FIT>) {
+        // Determine the behavioral_diversity as average hamming distance to all other individuals.
+        // hamming distance is symmetric.
+        let n = population.len();
+        for i in 0..n {
+            // determine  hehavioral diversity for `i`.
+            let mut diversity_i = 0;
+
+            // XXX: parallelize this loop
+            for j in i+1..n {
+                let distance = population.fitness()[i].behavioral_bitvec.hamming_distance(&population.fitness()[j].behavioral_bitvec);
+                diversity_i += distance;
+                population.fitness_mut()[j].behavioral_diversity += distance;
+            }
+
+            population.fitness_mut()[i].behavioral_diversity = diversity_i;
+        }
     }
 }

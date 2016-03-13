@@ -3,6 +3,7 @@ use nsga2::domination::Domination;
 use prob::Prob;
 use std::cmp::Ordering;
 use rand::Rng;
+use behavioral_bitvec::BehavioralBitvec;
 
 /// We use a fitness composed of three objectives. Smaller values are "better".
 
@@ -12,10 +13,16 @@ pub struct Fitness {
     pub domain_fitness: f32,
 
     /// The behavioral diversity of the CPPN (higher value is better!)
-    pub behavioral_diversity: f32,
+    ///
+    /// This value is not normalized towards the number of individuals in the population,
+    /// and as such just the sum of all hamming distances.
+    pub behavioral_diversity: u64,
 
     /// The connection cost of the generated network (smaller value is better!)
-    pub connection_cost: f32,
+    pub connection_cost: f64,
+
+    // This is used to determine the behavioral_diversity.
+    pub behavioral_bitvec: BehavioralBitvec,
 }
 
 impl MultiObjective for Fitness {
@@ -27,10 +34,7 @@ impl MultiObjective for Fitness {
         match objective {
             0 => self.domain_fitness.partial_cmp(&other.domain_fitness).unwrap().reverse(),
             1 => {
-                self.behavioral_diversity
-                    .partial_cmp(&other.behavioral_diversity)
-                    .unwrap()
-                    .reverse()
+                self.behavioral_diversity.cmp(&other.behavioral_diversity).reverse()
             }
             2 => self.connection_cost.partial_cmp(&other.connection_cost).unwrap(),
             _ => panic!(),
@@ -40,8 +44,8 @@ impl MultiObjective for Fitness {
     fn dist_objective(&self, other: &Self, objective: usize) -> f32 {
         match objective {
             0 => self.domain_fitness - other.domain_fitness,
-            1 => self.behavioral_diversity - other.behavioral_diversity,
-            2 => self.connection_cost - other.connection_cost,
+            1 => (self.behavioral_diversity - other.behavioral_diversity) as f32,
+            2 => (self.connection_cost - other.connection_cost) as f32,
             _ => panic!(),
         }
     }
