@@ -9,6 +9,7 @@ extern crate closed01;
 extern crate asexp;
 extern crate graph_io_gml;
 extern crate petgraph;
+#[macro_use] extern crate log;
 
 pub mod genome;
 pub mod weight;

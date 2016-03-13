@@ -105,6 +105,8 @@ pub struct CppnDriver {
     mutate_add_node_random_link_weight: bool,
     mutate_drop_node_tournament_k: usize,
     mutate_modify_node_tournament_k: usize,
+
+    mate_retries: usize,
 }
 
 impl CppnDriver {
@@ -163,41 +165,49 @@ impl Driver for CppnDriver {
     fn mate<R>(&self, rng: &mut R, parent1: &Self::IND, parent2: &Self::IND) -> Self::IND where R: Rng {
         let mut offspring = parent1.clone();
 
-        match MatingMethod::random_with(&self.mating_method_weights, rng) {
-            MatingMethod::MutateAddNode => {
-                let link_weight =  if self.mutate_add_node_random_link_weight {
-                    Some(self.link_weight_range.random_weight(rng))
-                } else {
-                    // duplicate existing node weight
-                    None
-                };
-                let hidden_node = self.random_hidden_node(rng);
-                let _modified = offspring.mutate_add_node(hidden_node, link_weight, rng);
-            }
-            MatingMethod::MutateDropNode => {
-                let _modified = offspring.mutate_drop_node(self.mutate_drop_node_tournament_k, rng);
-            }
-            MatingMethod::MutateModifyNode => {
-                let hidden_node = self.random_hidden_node(rng);
-                let _modified = offspring.mutate_modify_node(hidden_node, self.mutate_modify_node_tournament_k, rng);
-            }
-            MatingMethod::MutateConnect => {
-                let link_weight = self.link_weight_range.random_weight(rng);
-                let _modified = offspring.mutate_connect(link_weight, rng);
-            }
-            MatingMethod::MutateDisconnect => {
-                let _modified = offspring.mutate_disconnect(rng);
-            }
-            MatingMethod::MutateWeights => {
-                let _modifications = offspring.mutate_weights(self.mutate_element_prob,
-                                                         &self.weight_perturbance,
-                                                         &self.link_weight_range,
-                                                         rng);
-            }
-            MatingMethod::CrossoverWeights => {
-                let _modifications = offspring.crossover_weights(parent2, rng);
-            }
+        for i in 0..self.mate_retries+1 {
+            let modified = match MatingMethod::random_with(&self.mating_method_weights, rng) {
+                MatingMethod::MutateAddNode => {
+                    let link_weight =  if self.mutate_add_node_random_link_weight {
+                        Some(self.link_weight_range.random_weight(rng))
+                    } else {
+                        // duplicate existing node weight
+                        None
+                    };
+                    let hidden_node = self.random_hidden_node(rng);
+                    offspring.mutate_add_node(hidden_node, link_weight, rng)
+                }
+                MatingMethod::MutateDropNode => {
+                    offspring.mutate_drop_node(self.mutate_drop_node_tournament_k, rng)
+                }
+                MatingMethod::MutateModifyNode => {
+                    let hidden_node = self.random_hidden_node(rng);
+                    offspring.mutate_modify_node(hidden_node, self.mutate_modify_node_tournament_k, rng)
+                }
+                MatingMethod::MutateConnect => {
+                    let link_weight = self.link_weight_range.random_weight(rng);
+                    offspring.mutate_connect(link_weight, rng)
+                }
+                MatingMethod::MutateDisconnect => {
+                    offspring.mutate_disconnect(rng)
+                }
+                MatingMethod::MutateWeights => {
+                    let modifications = offspring.mutate_weights(self.mutate_element_prob,
+                                                             &self.weight_perturbance,
+                                                             &self.link_weight_range,
+                                                             rng);
+                    modifications != 0
+                }
+                MatingMethod::CrossoverWeights => {
+                    let modifications = offspring.crossover_weights(parent2, rng);
+                    modifications != 0
+                }
+            };
+
+            if modified { break }
         }
+
+        warn!("mate(): Genome was not modified!");
 
         return offspring;
     }
