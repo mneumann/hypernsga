@@ -1,6 +1,6 @@
 use graph_neighbor_matching::{SimilarityMatrix, ScoreNorm, WeightedNodeColors};
-use graph_neighbor_matching::graph::{OwnedGraph, GraphBuilder};
-use graph_neighbor_matching::{Graph, Edges};
+use graph_neighbor_matching::graph::{OwnedGraph};
+use graph_neighbor_matching::{Graph};
 use neuron::Neuron;
 use std::fs::File;
 use std::io::Read;
@@ -8,7 +8,7 @@ use std::str::FromStr;
 use graph_io_gml::parse_gml;
 use std::f32::{INFINITY, NEG_INFINITY};
 use closed01::Closed01;
-use std::io::{self, Write};
+//use std::io::{self, Write};
 use asexp::Sexp;
 use petgraph::Directed;
 use petgraph::Graph as PetGraph;

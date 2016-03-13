@@ -1,18 +1,16 @@
 use cppn_ext::cppn::{Cppn, CppnNode};
-use cppn_ext::position::{Position, Position3d};
 use cppn_ext::activation_function::{GeometricActivationFunction, ActivationFunction};
 use weight::{Weight, WeightRange, WeightPerturbanceMethod};
-use substrate::{Substrate, SubstrateConfiguration};
+use substrate::{Position, SubstrateConfiguration};
 use behavioral_bitvec::BehavioralBitvec;
 use genome::Genome;
 use nsga2::driver::Driver;
-use nsga2::population::{UnratedPopulation, RatedPopulation};
+use nsga2::population::RatedPopulation;
 use fitness::Fitness;
 use rand::Rng;
 use mating::{MatingMethod, MatingMethodWeights};
 use prob::Prob;
-use neuron::Neuron;
-use network_builder::{NetworkBuilder, NeuronNetworkBuilder};
+use network_builder::NetworkBuilder;
 use std::marker::PhantomData;
 
 pub type CppnGenome<AF> where AF: ActivationFunction = Genome<CppnNode<AF>>;
@@ -100,7 +98,8 @@ pub struct CppnDriver<'a, DOMFIT, G, P, T, NETBUILDER>
     where DOMFIT: DomainFitness<G> + 'a,
           P: Position + Sync + 'a,
           T: Sync + 'a,
-          NETBUILDER: NetworkBuilder<POS = P, NT = T, Output = G> + Sync
+          NETBUILDER: NetworkBuilder<POS = P, NT = T, Output = G> + Sync,
+          G: Sync,
 {
     mating_method_weights: MatingMethodWeights,
     activation_functions: Vec<GeometricActivationFunction>,
@@ -125,7 +124,8 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> CppnDriver<'a, DOMFIT, G, P, T, NETBUILDER
     where DOMFIT: DomainFitness<G>,
           P: Position + Sync + 'a,
           T: Sync + 'a,
-          NETBUILDER: NetworkBuilder<POS = P, NT = T, Output = G> + Sync
+          NETBUILDER: NetworkBuilder<POS = P, NT = T, Output = G> + Sync,
+          G: Sync,
 {
     fn random_hidden_node<R>(&self, rng: &mut R) -> CppnNode<GeometricActivationFunction>
         where R: Rng
@@ -140,7 +140,8 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
           G: Sync,
           P: Position + Sync + 'a,
           T: Sync + 'a,
-          NETBUILDER: NetworkBuilder<POS = P, NT = T, Output = G> + Sync
+          NETBUILDER: NetworkBuilder<POS = P, NT = T, Output = G> + Sync,
+          G: Sync,
 {
     type IND = CppnGenome<GeometricActivationFunction>;
     type FIT = Fitness;
@@ -149,27 +150,27 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
     ///
     /// We start from a minimal topology.
 
-    fn random_individual<R>(&self, rng: &mut R) -> Self::IND
+    fn random_individual<R>(&self, _rng: &mut R) -> Self::IND
         where R: Rng
     {
         let mut genome = Self::IND::new();
 
         // 6 inputs (x1,y1,z1, x2,y2,z2)
-        let inp_x1 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
-        let inp_y1 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
-        let inp_z1 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
-        let inp_x2 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
-        let inp_y2 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
-        let inp_z2 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
+        let _inp_x1 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
+        let _inp_y1 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
+        let _inp_z1 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
+        let _inp_x2 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
+        let _inp_y2 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
+        let _inp_z2 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
 
         // 1 bias node (constant input of 1.0)
-        let bias = genome.add_node(CppnNode::bias(GeometricActivationFunction::Constant1));
+        let _bias = genome.add_node(CppnNode::bias(GeometricActivationFunction::Constant1));
 
         // 4 outputs (t,w,ex,r)
-        let out_t = genome.add_node(CppnNode::output(GeometricActivationFunction::BipolarGaussian));
-        let out_w = genome.add_node(CppnNode::output(GeometricActivationFunction::BipolarGaussian));
-        let out_ex = genome.add_node(CppnNode::output(GeometricActivationFunction::Linear));
-        let out_r = genome.add_node(CppnNode::output(GeometricActivationFunction::BipolarGaussian));
+        let _out_t = genome.add_node(CppnNode::output(GeometricActivationFunction::BipolarGaussian));
+        let _out_w = genome.add_node(CppnNode::output(GeometricActivationFunction::BipolarGaussian));
+        let _out_ex = genome.add_node(CppnNode::output(GeometricActivationFunction::Linear));
+        let _out_r = genome.add_node(CppnNode::output(GeometricActivationFunction::BipolarGaussian));
 
         // make those nodes above immutable for mutation and crossover, as we need them to
         // develop the CPPN.
