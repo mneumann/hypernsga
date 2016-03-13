@@ -1,6 +1,4 @@
 use graph_neighbor_matching::graph::{OwnedGraph};
-use graph_neighbor_matching::{Graph};
-use neuron::Neuron;
 use std::fs::File;
 use std::io::Read;
 use std::str::FromStr;
@@ -21,39 +19,6 @@ pub trait NodeLabel {
     }
     fn node_shape(&self) -> &'static str {
         "circle"
-    }
-}
-
-#[derive(Debug)]
-pub struct NodeCount {
-    pub inputs: usize,
-    pub outputs: usize,
-    pub hidden: usize,
-}
-
-impl NodeCount {
-    pub fn from_graph(graph: &OwnedGraph<Neuron>) -> Self {
-        let mut cnt = NodeCount {
-            inputs: 0,
-            outputs: 0,
-            hidden: 0,
-        };
-
-        for node in graph.nodes() {
-            match node.node_value() {
-                &Neuron::Input => {
-                    cnt.inputs += 1;
-                }
-                &Neuron::Output => {
-                    cnt.outputs += 1;
-                }
-                &Neuron::Hidden => {
-                    cnt.hidden += 1;
-                }
-            }
-        }
-
-        return cnt;
     }
 }
 
@@ -87,7 +52,7 @@ fn normalize_to_closed01(w: f32, range: (f32, f32)) -> Closed01<f32> {
     }
 }
 
-pub fn load_graph_normalized<N, F>(graph_file: &str) -> OwnedGraph<N>
+pub fn load_graph_normalized<N>(graph_file: &str) -> OwnedGraph<N>
     where N: Clone + Debug + FromStr<Err = &'static str>
 {
     let graph_s = {

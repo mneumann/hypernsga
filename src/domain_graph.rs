@@ -3,11 +3,93 @@
 use closed01::Closed01;
 use graph_neighbor_matching::graph::{GraphBuilder, OwnedGraph};
 use std::marker::PhantomData;
-use neuron::Neuron;
 use substrate::{Position, Node};
 use network_builder::NetworkBuilder;
 use fitness::DomainFitness;
 use graph_neighbor_matching::{SimilarityMatrix, ScoreNorm, WeightedNodeColors};
+use graph::NodeLabel;
+use graph_neighbor_matching::NodeColorWeight;
+use std::str::FromStr;
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Neuron {
+    Input,
+    Output,
+    Hidden,
+}
+
+impl NodeLabel for Neuron {
+    fn node_label(&self, _idx: usize) -> Option<String> {
+        match *self {
+            Neuron::Input => Some("Input".to_owned()),
+            Neuron::Hidden => Some("Hidden".to_owned()),
+            Neuron::Output => Some("Output".to_owned()),
+        }
+    }
+    fn node_shape(&self) -> &'static str {
+        match *self {
+            Neuron::Input => "circle",
+            Neuron::Hidden => "box",
+            Neuron::Output => "doublecircle",
+        }
+    }
+}
+
+impl NodeColorWeight for Neuron {
+    fn node_color_weight(&self) -> f32 {
+        match *self {
+            Neuron::Input => 0.0,
+            Neuron::Hidden => 1.0,
+            Neuron::Output => 2.0,
+        }
+    }
+}
+
+impl FromStr for Neuron {
+    type Err = &'static str;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "input" => Ok(Neuron::Input),
+            "output" => Ok(Neuron::Output),
+            "hidden" => Ok(Neuron::Hidden),
+            _ => Err("Invalid node type/weight"),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct NodeCount {
+    pub inputs: usize,
+    pub outputs: usize,
+    pub hidden: usize,
+}
+
+impl NodeCount {
+    pub fn from_graph(graph: &OwnedGraph<Neuron>) -> Self {
+        let mut cnt = NodeCount {
+            inputs: 0,
+            outputs: 0,
+            hidden: 0,
+        };
+
+        for node in graph.nodes() {
+            match node.node_value() {
+                &Neuron::Input => {
+                    cnt.inputs += 1;
+                }
+                &Neuron::Output => {
+                    cnt.outputs += 1;
+                }
+                &Neuron::Hidden => {
+                    cnt.hidden += 1;
+                }
+            }
+        }
+
+        return cnt;
+    }
+}
+
 
 pub struct NeuronNetworkBuilder<P> where P: Position {
     builder: GraphBuilder<usize, Neuron>,

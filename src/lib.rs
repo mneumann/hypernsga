@@ -21,6 +21,5 @@ pub mod cppn;
 pub mod substrate;
 pub mod behavioral_bitvec;
 pub mod graph;
-pub mod neuron;
 pub mod network_builder;
 pub mod domain_graph;
