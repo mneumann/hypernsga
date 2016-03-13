@@ -135,6 +135,12 @@ pub struct GraphSimilarity {
     pub eps: f32,
 }
 
+impl GraphSimilarity {
+    pub fn target_graph_node_count(&self) -> NodeCount {
+        NodeCount::from_graph(&self.target_graph)
+    }
+}
+
 impl DomainFitness<OwnedGraph<Neuron>> for GraphSimilarity {
     // A larger fitness means "better"
     fn fitness(&self, graph: OwnedGraph<Neuron>) -> f32 {

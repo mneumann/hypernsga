@@ -41,7 +41,13 @@ impl MultiObjective for Fitness {
     fn dist_objective(&self, other: &Self, objective: usize) -> f32 {
         match objective {
             0 => self.domain_fitness - other.domain_fitness,
-            1 => (self.behavioral_diversity - other.behavioral_diversity) as f32,
+            1 => {
+                if self.behavioral_diversity > other.behavioral_diversity {
+                    (self.behavioral_diversity - other.behavioral_diversity) as f32
+                } else {
+                    (other.behavioral_diversity - self.behavioral_diversity) as f32
+                }
+            }
             2 => (self.connection_cost - other.connection_cost) as f32,
             _ => panic!(),
         }
@@ -54,10 +60,10 @@ impl MultiObjective for Fitness {
 pub struct FitnessDomination<'a, R>
     where R: Rng + 'a
 {
-    p_domain_fitness: Prob,
-    p_behavioral_diversity: Prob,
-    p_connection_cost: Prob,
-    rng: &'a mut R,
+    pub p_domain_fitness: Prob,
+    pub p_behavioral_diversity: Prob,
+    pub p_connection_cost: Prob,
+    pub rng: &'a mut R,
 }
 
 impl<'a, R> Domination<Fitness> for FitnessDomination<'a, R> where R: Rng + 'a

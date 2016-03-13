@@ -130,7 +130,7 @@ dependencies = [
 [[package]]
 name = "nsga2"
 version = "0.0.1"
-source = "git+https://github.com/mneumann/nsga2-rs#16b28fae7b5a07fa6315482f4251b47e5bcb2107"
+source = "git+https://github.com/mneumann/nsga2-rs#64f0fc77bffed43788d167807126f0d5acf5104a"
 dependencies = [
  "rand 0.3.14 (registry+https://github.com/rust-lang/crates.io-index)",
  "rayon 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
