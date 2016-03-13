@@ -43,9 +43,9 @@ impl<NT: NodeType> Genome<NT> {
     ///
     /// If a connection between these nodes already exists!
     ///
-    /// # Complexity 
+    /// # Complexity
     ///
-    /// O(1) because we use `add_link_unorderd`. 
+    /// O(1) because we use `add_link_unorderd`.
 
     pub fn add_link(&mut self, source_node: NodeIndex, target_node: NodeIndex, weight: Weight) {
         debug_assert!(!self.network.link_would_cycle(source_node, target_node));
@@ -167,10 +167,10 @@ impl<NT: NodeType> Genome<NT> {
         where R: Rng
     {
         if let Some(node_idx) = self.random_node(tournament_k, rng) {
-           if self.network.node(node_idx).node_type() != &new_node_type {
-               self.network.node_mut(node_idx).set_node_type(new_node_type);
-               return true;
-           }
+            if self.network.node(node_idx).node_type() != &new_node_type {
+                self.network.node_mut(node_idx).set_node_type(new_node_type);
+                return true;
+            }
         }
         return false;
     }
@@ -215,7 +215,7 @@ impl<NT: NodeType> Genome<NT> {
     }
 
 
-    /// Uniformly modify the weight of links, each with a probability of `mutate_element_prob`. It 
+    /// Uniformly modify the weight of links, each with a probability of `mutate_element_prob`. It
     /// the genome contains at least one link, it is guaranteed that this method makes a modification.
     ///
     /// Returns the number of modifications (if negative, indicates that we used a random link).

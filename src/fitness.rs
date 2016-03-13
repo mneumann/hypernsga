@@ -6,7 +6,6 @@ use rand::Rng;
 use behavioral_bitvec::BehavioralBitvec;
 
 /// We use a fitness composed of three objectives. Smaller values are "better".
-
 #[derive(Debug, Clone)]
 pub struct Fitness {
     /// The domain-specific fitness (higher value is better!)
@@ -33,9 +32,7 @@ impl MultiObjective for Fitness {
     fn cmp_objective(&self, other: &Self, objective: usize) -> Ordering {
         match objective {
             0 => self.domain_fitness.partial_cmp(&other.domain_fitness).unwrap().reverse(),
-            1 => {
-                self.behavioral_diversity.cmp(&other.behavioral_diversity).reverse()
-            }
+            1 => self.behavioral_diversity.cmp(&other.behavioral_diversity).reverse(),
             2 => self.connection_cost.partial_cmp(&other.connection_cost).unwrap(),
             _ => panic!(),
         }

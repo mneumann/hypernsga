@@ -4,34 +4,31 @@ use cppn_ext::position::Position;
 pub enum NodeConnectivity {
     In,
     Out,
-    InOut
+    InOut,
 }
 
 /// Represents a node in the substrate. `T` stores additional information about that node.
 #[derive(Clone, Debug)]
 pub struct Node<P, T>
-    where P: Position,
+    where P: Position
 {
     pub index: usize,
     pub position: P,
     pub node_info: T,
-    pub node_connectivity: NodeConnectivity
+    pub node_connectivity: NodeConnectivity,
 }
 
 #[derive(Clone, Debug)]
 pub struct Substrate<P, T>
-    where P: Position,
+    where P: Position
 {
-    nodes: Vec<Node<P,T>>,
+    nodes: Vec<Node<P, T>>,
 }
 
-impl<P, T> Substrate<P, T>
-    where P: Position,
+impl<P, T> Substrate<P, T> where P: Position
 {
     pub fn new() -> Self {
-        Substrate {
-            nodes: Vec::new(),
-        }
+        Substrate { nodes: Vec::new() }
     }
 
     pub fn add_node(&mut self, position: P, node_info: T, node_connectivity: NodeConnectivity) {
@@ -44,7 +41,7 @@ impl<P, T> Substrate<P, T>
         });
     }
 
-    pub fn nodes(&self) -> &[Node<P,T>] {
+    pub fn nodes(&self) -> &[Node<P, T>] {
         &self.nodes
     }
 
@@ -78,26 +75,26 @@ impl<P, T> Substrate<P, T>
         SubstrateConfiguration {
             nodes: &self.nodes,
             links: pairs,
-            null_position: P::origin(), // XXX: we might want something else than origin. 
+            null_position: P::origin(), // XXX: we might want something else than origin.
         }
     }
-
 }
 
 #[derive(Clone, Debug)]
 pub struct SubstrateConfiguration<'a, P, T>
     where P: Position + 'a,
-          T: 'a,
+          T: 'a
 {
-    nodes: &'a[Node<P,T>],
+    nodes: &'a [Node<P, T>],
     links: Vec<(&'a Node<P, T>, &'a Node<P, T>)>,
     null_position: P,
 }
 
 impl<'a, P, T> SubstrateConfiguration<'a, P, T>
-    where P: Position + 'a, T: 'a,
+    where P: Position + 'a,
+          T: 'a
 {
-    pub fn nodes(&self) -> &[Node<P,T>] {
+    pub fn nodes(&self) -> &[Node<P, T>] {
         self.nodes
     }
     pub fn links(&self) -> &[(&'a Node<P, T>, &'a Node<P, T>)] {

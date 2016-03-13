@@ -33,8 +33,8 @@ impl NetworkBuilder for NeuronNetworkBuilder {
                 target_node: &Node<Self::POS, Self::NT>,
                 weight1: f64,
                 weight2: f64) {
-                    unimplemented!()
-                }
+        unimplemented!()
+    }
     fn graph(self) -> Self::G {
         ()
     }
@@ -52,13 +52,13 @@ const CPPN_OUTPUT_NODE_WEIGHT: usize = 3;
 /// Returns the BehavioralBitvec and Connection Cost of the developed network
 
 fn develop_cppn<'a, P, AF, T, V>(cppn: &mut Cppn<CppnNode<AF>, Weight, ()>,
-                             substrate_config: &SubstrateConfiguration<'a, P, T>,
-                             visitor: &mut V,
-                             leo_threshold: f64)
-                             -> (BehavioralBitvec, f64)
+                                 substrate_config: &SubstrateConfiguration<'a, P, T>,
+                                 visitor: &mut V,
+                                 leo_threshold: f64)
+                                 -> (BehavioralBitvec, f64)
     where P: Position,
           AF: ActivationFunction,
-          V: NetworkBuilder<POS=P, NT=T>
+          V: NetworkBuilder<POS = P, NT = T>
 {
     // our CPPN has four outputs: link weight 1, link weight 2, link expression output, node weight
     assert!(cppn.output_count() == 4);
@@ -121,7 +121,9 @@ pub trait DomainFitness<G>: Sync where G: Sync {
     fn fitness(&self, g: G) -> f32;
 }
 
-pub struct CppnDriver<'a, DOMFIT, G> where DOMFIT: DomainFitness<G> + 'a {
+pub struct CppnDriver<'a, DOMFIT, G>
+    where DOMFIT: DomainFitness<G> + 'a
+{
     mating_method_weights: MatingMethodWeights,
     activation_functions: Vec<GeometricActivationFunction>,
     mutate_element_prob: Prob,
@@ -137,29 +139,35 @@ pub struct CppnDriver<'a, DOMFIT, G> where DOMFIT: DomainFitness<G> + 'a {
     link_expression_threshold: f64,
 
     domain_fitness: &'a DOMFIT,
-    _g: PhantomData<G>,
-
-    // substrate_configuration: SubstrateConfiguration,
-    // XXX: Substrate
+    _g: PhantomData<G>, /* substrate_configuration: SubstrateConfiguration,
+                         * XXX: Substrate */
 }
 
-impl<'a, DOMFIT, G> CppnDriver<'a, DOMFIT, G> where DOMFIT: DomainFitness<G> {
-    fn random_hidden_node<R>(&self, rng: &mut R) -> CppnNode<GeometricActivationFunction> where R: Rng {
+impl<'a, DOMFIT, G> CppnDriver<'a, DOMFIT, G> where DOMFIT: DomainFitness<G>
+{
+    fn random_hidden_node<R>(&self, rng: &mut R) -> CppnNode<GeometricActivationFunction>
+        where R: Rng
+    {
         let af = *rng.choose(&self.activation_functions).unwrap();
         CppnNode::hidden(af)
     }
 }
 
-impl<'a, DOMFIT, G> Driver for CppnDriver<'a, DOMFIT, G> where DOMFIT: DomainFitness<G>, G: Sync {
+impl<'a, DOMFIT, G> Driver for CppnDriver<'a, DOMFIT, G>
+    where DOMFIT: DomainFitness<G>,
+          G: Sync
+{
     type IND = CppnGenome<GeometricActivationFunction>;
     type FIT = Fitness;
 
     /// Creates a random individual for use by the start generation.
-    /// 
+    ///
     /// We start from a minimal topology.
 
-    fn random_individual<R>(&self, rng: &mut R) -> Self::IND where R: Rng {
-        let mut genome = Self::IND::new(); 
+    fn random_individual<R>(&self, rng: &mut R) -> Self::IND
+        where R: Rng
+    {
+        let mut genome = Self::IND::new();
 
         // 6 inputs (x1,y1,z1, x2,y2,z2)
         let inp_x1 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
@@ -173,10 +181,10 @@ impl<'a, DOMFIT, G> Driver for CppnDriver<'a, DOMFIT, G> where DOMFIT: DomainFit
         let bias = genome.add_node(CppnNode::bias(GeometricActivationFunction::Constant1));
 
         // 4 outputs (t,w,ex,r)
-        let out_t  = genome.add_node(CppnNode::output(GeometricActivationFunction::BipolarGaussian));
-        let out_w  = genome.add_node(CppnNode::output(GeometricActivationFunction::BipolarGaussian));
+        let out_t = genome.add_node(CppnNode::output(GeometricActivationFunction::BipolarGaussian));
+        let out_w = genome.add_node(CppnNode::output(GeometricActivationFunction::BipolarGaussian));
         let out_ex = genome.add_node(CppnNode::output(GeometricActivationFunction::Linear));
-        let out_r  = genome.add_node(CppnNode::output(GeometricActivationFunction::BipolarGaussian));
+        let out_r = genome.add_node(CppnNode::output(GeometricActivationFunction::BipolarGaussian));
 
         // make those nodes above immutable for mutation and crossover, as we need them to
         // develop the CPPN.
@@ -195,11 +203,10 @@ impl<'a, DOMFIT, G> Driver for CppnDriver<'a, DOMFIT, G> where DOMFIT: DomainFit
         let substrate: Substrate<Position3d, Neuron> = Substrate::new();
         let cfg = substrate.to_configuration();
 
-        let (behavioral_bitvec, connection_cost) = 
-        develop_cppn(&mut cppn,
-                     &cfg,
-                     &mut net_builder,
-                     self.link_expression_threshold);
+        let (behavioral_bitvec, connection_cost) = develop_cppn(&mut cppn,
+                                                                &cfg,
+                                                                &mut net_builder,
+                                                                self.link_expression_threshold);
 
         // XXX: Domain specific fitness
         Fitness {
@@ -210,13 +217,15 @@ impl<'a, DOMFIT, G> Driver for CppnDriver<'a, DOMFIT, G> where DOMFIT: DomainFit
         }
     }
 
-    fn mate<R>(&self, rng: &mut R, parent1: &Self::IND, parent2: &Self::IND) -> Self::IND where R: Rng {
+    fn mate<R>(&self, rng: &mut R, parent1: &Self::IND, parent2: &Self::IND) -> Self::IND
+        where R: Rng
+    {
         let mut offspring = parent1.clone();
 
-        for i in 0..self.mate_retries+1 {
+        for i in 0..self.mate_retries + 1 {
             let modified = match MatingMethod::random_with(&self.mating_method_weights, rng) {
                 MatingMethod::MutateAddNode => {
-                    let link_weight =  if self.mutate_add_node_random_link_weight {
+                    let link_weight = if self.mutate_add_node_random_link_weight {
                         Some(self.link_weight_range.random_weight(rng))
                     } else {
                         // duplicate existing node weight
@@ -230,20 +239,20 @@ impl<'a, DOMFIT, G> Driver for CppnDriver<'a, DOMFIT, G> where DOMFIT: DomainFit
                 }
                 MatingMethod::MutateModifyNode => {
                     let hidden_node = self.random_hidden_node(rng);
-                    offspring.mutate_modify_node(hidden_node, self.mutate_modify_node_tournament_k, rng)
+                    offspring.mutate_modify_node(hidden_node,
+                                                 self.mutate_modify_node_tournament_k,
+                                                 rng)
                 }
                 MatingMethod::MutateConnect => {
                     let link_weight = self.link_weight_range.random_weight(rng);
                     offspring.mutate_connect(link_weight, rng)
                 }
-                MatingMethod::MutateDisconnect => {
-                    offspring.mutate_disconnect(rng)
-                }
+                MatingMethod::MutateDisconnect => offspring.mutate_disconnect(rng),
                 MatingMethod::MutateWeights => {
                     let modifications = offspring.mutate_weights(self.mutate_element_prob,
-                                                             &self.weight_perturbance,
-                                                             &self.link_weight_range,
-                                                             rng);
+                                                                 &self.weight_perturbance,
+                                                                 &self.link_weight_range,
+                                                                 rng);
                     modifications != 0
                 }
                 MatingMethod::CrossoverWeights => {
@@ -252,7 +261,9 @@ impl<'a, DOMFIT, G> Driver for CppnDriver<'a, DOMFIT, G> where DOMFIT: DomainFit
                 }
             };
 
-            if modified { break }
+            if modified {
+                break;
+            }
         }
 
         warn!("mate(): Genome was NOT modified!");
@@ -269,8 +280,10 @@ impl<'a, DOMFIT, G> Driver for CppnDriver<'a, DOMFIT, G> where DOMFIT: DomainFit
             let mut diversity_i = 0;
 
             // XXX: parallelize this loop
-            for j in i+1..n {
-                let distance = population.fitness()[i].behavioral_bitvec.hamming_distance(&population.fitness()[j].behavioral_bitvec);
+            for j in i + 1..n {
+                let distance = population.fitness()[i]
+                                   .behavioral_bitvec
+                                   .hamming_distance(&population.fitness()[j].behavioral_bitvec);
                 diversity_i += distance;
                 population.fitness_mut()[j].behavioral_diversity += distance;
             }
