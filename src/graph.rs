@@ -1,4 +1,3 @@
-use graph_neighbor_matching::{SimilarityMatrix, ScoreNorm, WeightedNodeColors};
 use graph_neighbor_matching::graph::{OwnedGraph};
 use graph_neighbor_matching::{Graph};
 use neuron::Neuron;
@@ -22,29 +21,6 @@ pub trait NodeLabel {
     }
     fn node_shape(&self) -> &'static str {
         "circle"
-    }
-}
-
-#[derive(Debug)]
-pub struct GraphSimilarity {
-    pub target_graph: OwnedGraph<Neuron>,
-    pub edge_score: bool,
-    pub iters: usize,
-    pub eps: f32,
-}
-
-impl GraphSimilarity {
-    // A larger fitness means "better"
-    pub fn fitness(&self, graph: &OwnedGraph<Neuron>) -> f32 {
-        let mut s = SimilarityMatrix::new(graph, &self.target_graph, WeightedNodeColors);
-        s.iterate(self.iters, self.eps);
-        let assignment = s.optimal_node_assignment();
-        let score = s.score_optimal_sum_norm(Some(&assignment), ScoreNorm::MaxDegree).get();
-        if self.edge_score {
-            score * s.score_outgoing_edge_weights_sum_norm(&assignment, ScoreNorm::MaxDegree).get()
-        } else {
-            score
-        }
     }
 }
 

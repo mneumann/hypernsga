@@ -114,3 +114,9 @@ impl<'a, R> Domination<Fitness> for FitnessDomination<'a, R> where R: Rng + 'a
         }
     }
 }
+
+/// Trait used to evaluate the domain specific fitness
+
+pub trait DomainFitness<G>: Sync where G: Sync {
+    fn fitness(&self, g: G) -> f32;
+}

@@ -6,7 +6,7 @@ use behavioral_bitvec::BehavioralBitvec;
 use genome::Genome;
 use nsga2::driver::Driver;
 use nsga2::population::RatedPopulation;
-use fitness::Fitness;
+use fitness::{Fitness, DomainFitness};
 use rand::Rng;
 use mating::{MatingMethod, MatingMethodWeights};
 use prob::Prob;
@@ -89,10 +89,6 @@ fn develop_cppn<'a, P, AF, T, V>(cppn: &mut Cppn<CppnNode<AF>, Weight, ()>,
 }
 
 /// Determines the domain fitness of `G`
-
-pub trait DomainFitness<G>: Sync where G: Sync {
-    fn fitness(&self, g: G) -> f32;
-}
 
 pub struct CppnDriver<'a, DOMFIT, G, P, T, NETBUILDER>
     where DOMFIT: DomainFitness<G> + 'a,
