@@ -1,4 +1,4 @@
-pub use cppn_ext::position::Position;
+pub use cppn_ext::position::{Position, Position3d};
 
 #[derive(Debug, Copy, Clone)]
 pub enum NodeConnectivity {

@@ -1,5 +1,6 @@
 use cppn_ext::cppn::{Cppn, CppnNode};
-use cppn_ext::activation_function::{GeometricActivationFunction, ActivationFunction};
+use cppn_ext::activation_function::ActivationFunction;
+pub use cppn_ext::activation_function::GeometricActivationFunction;
 use weight::{Weight, WeightRange, WeightPerturbanceMethod};
 use substrate::{Position, SubstrateConfiguration};
 use behavioral_bitvec::BehavioralBitvec;
@@ -97,23 +98,23 @@ pub struct CppnDriver<'a, DOMFIT, G, P, T, NETBUILDER>
           NETBUILDER: NetworkBuilder<POS = P, NT = T, Output = G> + Sync,
           G: Sync,
 {
-    mating_method_weights: MatingMethodWeights,
-    activation_functions: Vec<GeometricActivationFunction>,
-    mutate_element_prob: Prob,
-    weight_perturbance: WeightPerturbanceMethod,
-    link_weight_range: WeightRange,
+    pub mating_method_weights: MatingMethodWeights,
+    pub activation_functions: Vec<GeometricActivationFunction>,
+    pub mutate_element_prob: Prob,
+    pub weight_perturbance: WeightPerturbanceMethod,
+    pub link_weight_range: WeightRange,
 
-    mutate_add_node_random_link_weight: bool,
-    mutate_drop_node_tournament_k: usize,
-    mutate_modify_node_tournament_k: usize,
+    pub mutate_add_node_random_link_weight: bool,
+    pub mutate_drop_node_tournament_k: usize,
+    pub mutate_modify_node_tournament_k: usize,
 
-    mate_retries: usize,
+    pub mate_retries: usize,
 
-    link_expression_threshold: f64,
+    pub link_expression_threshold: f64,
 
-    substrate_configuration: SubstrateConfiguration<'a, P, T>,
-    domain_fitness: &'a DOMFIT,
-    _phantom: PhantomData<NETBUILDER>,
+    pub substrate_configuration: SubstrateConfiguration<'a, P, T>,
+    pub domain_fitness: &'a DOMFIT,
+    pub _netbuilder: PhantomData<NETBUILDER>,
 }
 
 impl<'a, DOMFIT, G, P, T, NETBUILDER> CppnDriver<'a, DOMFIT, G, P, T, NETBUILDER>
