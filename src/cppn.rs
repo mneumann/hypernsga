@@ -1,7 +1,7 @@
 use cppn_ext::cppn::{Cppn, CppnNode};
 use cppn_ext::position::Position;
 use cppn_ext::activation_function::{GeometricActivationFunction, ActivationFunction};
-use weight::Weight;
+use weight::{Weight, WeightRange, WeightPerturbanceMethod};
 use substrate::{Substrate, Node};
 use behavioral_bitvec::BehavioralBitvec;
 use genome::Genome;
@@ -9,6 +9,8 @@ use nsga2::driver::Driver;
 use nsga2::population::{UnratedPopulation, RatedPopulation};
 use fitness::Fitness;
 use rand::Rng;
+use mating::{MatingMethod, MatingMethodWeights};
+use prob::Prob;
 
 pub type CppnGenome<AF> where AF: ActivationFunction = Genome<CppnNode<AF>>;
 
@@ -93,7 +95,24 @@ fn develop_cppn<P, AF, T, V>(cppn: &mut Cppn<CppnNode<AF>, Weight, ()>,
     return (bitvec, connection_cost);
 }
 
-pub struct CppnDriver;
+pub struct CppnDriver {
+    mating_method_weights: MatingMethodWeights,
+    activation_functions: Vec<GeometricActivationFunction>,
+    mutate_element_prob: Prob,
+    weight_perturbance: WeightPerturbanceMethod,
+    link_weight_range: WeightRange,
+
+    mutate_add_node_random_link_weight: bool,
+    mutate_drop_node_tournament_k: usize,
+    mutate_modify_node_tournament_k: usize,
+}
+
+impl CppnDriver {
+    fn random_hidden_node<R>(&self, rng: &mut R) -> CppnNode<GeometricActivationFunction> where R: Rng {
+        let af = *rng.choose(&self.activation_functions).unwrap();
+        CppnNode::hidden(af)
+    }
+}
 
 impl Driver for CppnDriver {
     type IND = CppnGenome<GeometricActivationFunction>;
@@ -142,7 +161,45 @@ impl Driver for CppnDriver {
     }
 
     fn mate<R>(&self, rng: &mut R, parent1: &Self::IND, parent2: &Self::IND) -> Self::IND where R: Rng {
-        parent1.clone()
+        let mut offspring = parent1.clone();
+
+        match MatingMethod::random_with(&self.mating_method_weights, rng) {
+            MatingMethod::MutateAddNode => {
+                let link_weight =  if self.mutate_add_node_random_link_weight {
+                    Some(self.link_weight_range.random_weight(rng))
+                } else {
+                    // duplicate existing node weight
+                    None
+                };
+                let hidden_node = self.random_hidden_node(rng);
+                let _modified = offspring.mutate_add_node(hidden_node, link_weight, rng);
+            }
+            MatingMethod::MutateDropNode => {
+                let _modified = offspring.mutate_drop_node(self.mutate_drop_node_tournament_k, rng);
+            }
+            MatingMethod::MutateModifyNode => {
+                let hidden_node = self.random_hidden_node(rng);
+                let _modified = offspring.mutate_modify_node(hidden_node, self.mutate_modify_node_tournament_k, rng);
+            }
+            MatingMethod::MutateConnect => {
+                let link_weight = self.link_weight_range.random_weight(rng);
+                let _modified = offspring.mutate_connect(link_weight, rng);
+            }
+            MatingMethod::MutateDisconnect => {
+                let _modified = offspring.mutate_disconnect(rng);
+            }
+            MatingMethod::MutateWeights => {
+                let _modifications = offspring.mutate_weights(self.mutate_element_prob,
+                                                         &self.weight_perturbance,
+                                                         &self.link_weight_range,
+                                                         rng);
+            }
+            MatingMethod::CrossoverWeights => {
+                let _modifications = offspring.crossover_weights(parent2, rng);
+            }
+        }
+
+        return offspring;
     }
 
     fn population_metric(&self, population: &mut RatedPopulation<Self::IND, Self::FIT>) {
