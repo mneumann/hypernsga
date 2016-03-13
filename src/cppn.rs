@@ -2,7 +2,7 @@ use cppn_ext::cppn::{Cppn, CppnNode};
 use cppn_ext::position::{Position, Position3d};
 use cppn_ext::activation_function::{GeometricActivationFunction, ActivationFunction};
 use weight::{Weight, WeightRange, WeightPerturbanceMethod};
-use substrate::{Substrate, SubstrateConfiguration, Node, NetworkBuilder};
+use substrate::{Substrate, SubstrateConfiguration};
 use behavioral_bitvec::BehavioralBitvec;
 use genome::Genome;
 use nsga2::driver::Driver;
@@ -12,36 +12,10 @@ use rand::Rng;
 use mating::{MatingMethod, MatingMethodWeights};
 use prob::Prob;
 use neuron::Neuron;
+use network_builder::{NetworkBuilder, NeuronNetworkBuilder};
 use std::marker::PhantomData;
 
 pub type CppnGenome<AF> where AF: ActivationFunction = Genome<CppnNode<AF>>;
-
-pub struct NeuronNetworkBuilder;
-
-impl NetworkBuilder for NeuronNetworkBuilder {
-    type POS = Position3d;
-    type NT = Neuron;
-    type G = ();
-
-    fn new() -> Self {
-        NeuronNetworkBuilder
-    }
-
-    fn add_node(&mut self, node: &Node<Self::POS, Self::NT>, param: f64) {
-        unimplemented!()
-    }
-
-    fn add_link(&mut self,
-                source_node: &Node<Self::POS, Self::NT>,
-                target_node: &Node<Self::POS, Self::NT>,
-                weight1: f64,
-                weight2: f64) {
-        unimplemented!()
-    }
-    fn network(self) -> Self::G {
-        ()
-    }
-}
 
 const CPPN_OUTPUT_LINK_WEIGHT1: usize = 0;
 const CPPN_OUTPUT_LINK_WEIGHT2: usize = 1;
