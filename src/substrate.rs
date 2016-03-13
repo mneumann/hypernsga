@@ -118,6 +118,7 @@ pub trait NetworkBuilder {
     type NT;
     type G;
 
+    fn new() -> Self;
     fn add_node(&mut self, node: &Node<Self::POS, Self::NT>, param: f64);
     fn add_link(&mut self,
                 source_node: &Node<Self::POS, Self::NT>,

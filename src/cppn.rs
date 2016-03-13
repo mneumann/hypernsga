@@ -24,6 +24,10 @@ impl NetworkBuilder for NeuronNetworkBuilder {
     type NT = Neuron;
     type G = ();
 
+    fn new() -> Self {
+        NeuronNetworkBuilder
+    }
+
     fn add_node(&mut self, node: &Node<Self::POS, Self::NT>, param: f64) {
         unimplemented!()
     }
@@ -121,8 +125,11 @@ pub trait DomainFitness<G>: Sync where G: Sync {
     fn fitness(&self, g: G) -> f32;
 }
 
-pub struct CppnDriver<'a, DOMFIT, G>
-    where DOMFIT: DomainFitness<G> + 'a
+pub struct CppnDriver<'a, DOMFIT, G, P, T, NETBUILDER>
+    where DOMFIT: DomainFitness<G> + 'a,
+          P: Position + Sync + 'a,
+          T: Sync + 'a,
+          NETBUILDER: NetworkBuilder<POS = P, NT = T, G = G> + Sync
 {
     mating_method_weights: MatingMethodWeights,
     activation_functions: Vec<GeometricActivationFunction>,
@@ -138,12 +145,16 @@ pub struct CppnDriver<'a, DOMFIT, G>
 
     link_expression_threshold: f64,
 
+    substrate_configuration: SubstrateConfiguration<'a, P, T>,
     domain_fitness: &'a DOMFIT,
-    _g: PhantomData<G>, /* substrate_configuration: SubstrateConfiguration,
-                         * XXX: Substrate */
+    _phantom: PhantomData<NETBUILDER>,
 }
 
-impl<'a, DOMFIT, G> CppnDriver<'a, DOMFIT, G> where DOMFIT: DomainFitness<G>
+impl<'a, DOMFIT, G, P, T, NETBUILDER> CppnDriver<'a, DOMFIT, G, P, T, NETBUILDER>
+    where DOMFIT: DomainFitness<G>,
+          P: Position + Sync + 'a,
+          T: Sync + 'a,
+          NETBUILDER: NetworkBuilder<POS = P, NT = T, G = G> + Sync
 {
     fn random_hidden_node<R>(&self, rng: &mut R) -> CppnNode<GeometricActivationFunction>
         where R: Rng
@@ -153,9 +164,12 @@ impl<'a, DOMFIT, G> CppnDriver<'a, DOMFIT, G> where DOMFIT: DomainFitness<G>
     }
 }
 
-impl<'a, DOMFIT, G> Driver for CppnDriver<'a, DOMFIT, G>
+impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T, NETBUILDER>
     where DOMFIT: DomainFitness<G>,
-          G: Sync
+          G: Sync,
+          P: Position + Sync + 'a,
+          T: Sync + 'a,
+          NETBUILDER: NetworkBuilder<POS = P, NT = T, G = G> + Sync
 {
     type IND = CppnGenome<GeometricActivationFunction>;
     type FIT = Fitness;
@@ -198,13 +212,13 @@ impl<'a, DOMFIT, G> Driver for CppnDriver<'a, DOMFIT, G>
 
     fn fitness(&self, ind: &Self::IND) -> Self::FIT {
         let mut cppn = Cppn::new(ind.network());
-        let mut net_builder = NeuronNetworkBuilder;
+        let mut net_builder = NETBUILDER::new();
 
-        let substrate: Substrate<Position3d, Neuron> = Substrate::new();
-        let cfg = substrate.to_configuration();
+        // let substrate: Substrate<Position3d, Neuron> = Substrate::new();
+        // let cfg = substrate.to_configuration();
 
         let (behavioral_bitvec, connection_cost) = develop_cppn(&mut cppn,
-                                                                &cfg,
+                                                                &self.substrate_configuration,
                                                                 &mut net_builder,
                                                                 self.link_expression_threshold);
 
@@ -222,7 +236,7 @@ impl<'a, DOMFIT, G> Driver for CppnDriver<'a, DOMFIT, G>
     {
         let mut offspring = parent1.clone();
 
-        for i in 0..self.mate_retries + 1 {
+        for _ in 0..self.mate_retries + 1 {
             let modified = match MatingMethod::random_with(&self.mating_method_weights, rng) {
                 MatingMethod::MutateAddNode => {
                     let link_weight = if self.mutate_add_node_random_link_weight {
