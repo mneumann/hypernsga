@@ -166,13 +166,13 @@ impl<NT: NodeType> Genome<NT> {
                                  -> bool
         where R: Rng
     {
-        match self.random_node(tournament_k, rng) {
-            None => false,
-            Some(node_idx) => {
-                self.network.node_mut(node_idx).set_node_type(new_node_type);
-                true
-            }
+        if let Some(node_idx) = self.random_node(tournament_k, rng) {
+           if self.network.node(node_idx).node_type() != &new_node_type {
+               self.network.node_mut(node_idx).set_node_type(new_node_type);
+               return true;
+           }
         }
+        return false;
     }
 
     /// Structural Mutation `Connect`.
