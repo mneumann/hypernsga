@@ -100,7 +100,7 @@ pub struct CppnDriver<'a, DOMFIT, G, P, T, NETBUILDER>
     where DOMFIT: DomainFitness<G> + 'a,
           P: Position + Sync + 'a,
           T: Sync + 'a,
-          NETBUILDER: NetworkBuilder<POS = P, NT = T, G = G> + Sync
+          NETBUILDER: NetworkBuilder<POS = P, NT = T, Output = G> + Sync
 {
     mating_method_weights: MatingMethodWeights,
     activation_functions: Vec<GeometricActivationFunction>,
@@ -125,7 +125,7 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> CppnDriver<'a, DOMFIT, G, P, T, NETBUILDER
     where DOMFIT: DomainFitness<G>,
           P: Position + Sync + 'a,
           T: Sync + 'a,
-          NETBUILDER: NetworkBuilder<POS = P, NT = T, G = G> + Sync
+          NETBUILDER: NetworkBuilder<POS = P, NT = T, Output = G> + Sync
 {
     fn random_hidden_node<R>(&self, rng: &mut R) -> CppnNode<GeometricActivationFunction>
         where R: Rng
@@ -140,7 +140,7 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
           G: Sync,
           P: Position + Sync + 'a,
           T: Sync + 'a,
-          NETBUILDER: NetworkBuilder<POS = P, NT = T, G = G> + Sync
+          NETBUILDER: NetworkBuilder<POS = P, NT = T, Output = G> + Sync
 {
     type IND = CppnGenome<GeometricActivationFunction>;
     type FIT = Fitness;
