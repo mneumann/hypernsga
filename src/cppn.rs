@@ -2,7 +2,7 @@ use cppn_ext::cppn::{Cppn, CppnNode};
 use cppn_ext::position::{Position, Position3d};
 use cppn_ext::activation_function::{GeometricActivationFunction, ActivationFunction};
 use weight::{Weight, WeightRange, WeightPerturbanceMethod};
-use substrate::{Substrate, Node};
+use substrate::{Substrate, SubstrateConfiguration, Node, NetworkBuilder};
 use behavioral_bitvec::BehavioralBitvec;
 use genome::Genome;
 use nsga2::driver::Driver;
@@ -12,30 +12,31 @@ use rand::Rng;
 use mating::{MatingMethod, MatingMethodWeights};
 use prob::Prob;
 use neuron::Neuron;
+use std::marker::PhantomData;
 
 pub type CppnGenome<AF> where AF: ActivationFunction = Genome<CppnNode<AF>>;
 
-pub trait NetworkBuilderVisitor<P, T> where P: Position {
-    fn add_node(&mut self, node: &Node<P, T>, param: f64);
-    fn add_link(&mut self,
-                source_node: &Node<P, T>,
-                target_node: &Node<P, T>,
-                weight1: f64,
-                weight2: f64);
-}
 
 pub struct NeuronNetworkBuilder;
 
-impl NetworkBuilderVisitor<Position3d, Neuron> for NeuronNetworkBuilder {
-    fn add_node(&mut self, node: &Node<Position3d, Neuron>, param: f64) {
+impl NetworkBuilder for NeuronNetworkBuilder {
+    type POS = Position3d;
+    type NT = Neuron;
+    type G = ();
+
+    fn add_node(&mut self, node: &Node<Self::POS, Self::NT>, param: f64) {
         unimplemented!()
     }
+
     fn add_link(&mut self,
-                source_node: &Node<Position3d, Neuron>,
-                target_node: &Node<Position3d, Neuron>,
+                source_node: &Node<Self::POS, Self::NT>,
+                target_node: &Node<Self::POS, Self::NT>,
                 weight1: f64,
                 weight2: f64) {
-        unimplemented!()
+                    unimplemented!()
+                }
+    fn graph(self) -> Self::G {
+        ()
     }
 }
 
@@ -50,21 +51,22 @@ const CPPN_OUTPUT_NODE_WEIGHT: usize = 3;
 ///
 /// Returns the BehavioralBitvec and Connection Cost of the developed network
 
-fn develop_cppn<P, AF, T, V>(cppn: &mut Cppn<CppnNode<AF>, Weight, ()>,
-                             null_position: &P,
-                             nodes: &[Node<P, T>],
-                             links: &[(&Node<P, T>, &Node<P, T>)],
+fn develop_cppn<'a, P, AF, T, V>(cppn: &mut Cppn<CppnNode<AF>, Weight, ()>,
+                             substrate_config: &SubstrateConfiguration<'a, P, T>,
                              visitor: &mut V,
                              leo_threshold: f64)
                              -> (BehavioralBitvec, f64)
     where P: Position,
           AF: ActivationFunction,
-          V: NetworkBuilderVisitor<P, T>
+          V: NetworkBuilder<POS=P, NT=T>
 {
-
     // our CPPN has four outputs: link weight 1, link weight 2, link expression output, node weight
     assert!(cppn.output_count() == 4);
     assert!(cppn.input_count() == 6);
+
+    let nodes = substrate_config.nodes();
+    let links = substrate_config.links();
+    let null_position = substrate_config.null_position();
 
     let mut bitvec = BehavioralBitvec::new(4 * (nodes.len() + links.len()));
     let mut connection_cost = 0.0;
@@ -113,7 +115,13 @@ fn develop_cppn<P, AF, T, V>(cppn: &mut Cppn<CppnNode<AF>, Weight, ()>,
     return (bitvec, connection_cost);
 }
 
-pub struct CppnDriver {
+/// Determines the domain fitness of `G`
+
+pub trait DomainFitness<G>: Sync where G: Sync {
+    fn fitness(&self, g: G) -> f32;
+}
+
+pub struct CppnDriver<'a, DOMFIT, G> where DOMFIT: DomainFitness<G> + 'a {
     mating_method_weights: MatingMethodWeights,
     activation_functions: Vec<GeometricActivationFunction>,
     mutate_element_prob: Prob,
@@ -127,17 +135,22 @@ pub struct CppnDriver {
     mate_retries: usize,
 
     link_expression_threshold: f64,
+
+    domain_fitness: &'a DOMFIT,
+    _g: PhantomData<G>,
+
+    // substrate_configuration: SubstrateConfiguration,
     // XXX: Substrate
 }
 
-impl CppnDriver {
+impl<'a, DOMFIT, G> CppnDriver<'a, DOMFIT, G> where DOMFIT: DomainFitness<G> {
     fn random_hidden_node<R>(&self, rng: &mut R) -> CppnNode<GeometricActivationFunction> where R: Rng {
         let af = *rng.choose(&self.activation_functions).unwrap();
         CppnNode::hidden(af)
     }
 }
 
-impl Driver for CppnDriver {
+impl<'a, DOMFIT, G> Driver for CppnDriver<'a, DOMFIT, G> where DOMFIT: DomainFitness<G>, G: Sync {
     type IND = CppnGenome<GeometricActivationFunction>;
     type FIT = Fitness;
 
@@ -179,11 +192,12 @@ impl Driver for CppnDriver {
         let mut cppn = Cppn::new(ind.network());
         let mut net_builder = NeuronNetworkBuilder;
 
+        let substrate: Substrate<Position3d, Neuron> = Substrate::new();
+        let cfg = substrate.to_configuration();
+
         let (behavioral_bitvec, connection_cost) = 
         develop_cppn(&mut cppn,
-                     &Position3d::origin(),
-                     &[], // XXX: nodes
-                     &[], // XXX: links,
+                     &cfg,
                      &mut net_builder,
                      self.link_expression_threshold);
 
