@@ -8,7 +8,7 @@ use genome::Genome;
 use nsga2::driver::Driver;
 use nsga2::population::RatedPopulation;
 use fitness::{Fitness, DomainFitness};
-use rand::Rng;
+use rand::{Rng, SeedableRng};
 use mating::{MatingMethod, MatingMethodWeights};
 use prob::Prob;
 use network_builder::NetworkBuilder;
@@ -170,7 +170,7 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
     fn random_individual<R>(&self, rng: &mut R) -> Self::IND
         where R: Rng
     {
-        let mut genome = Self::IND::new();
+        let mut genome = Self::IND::new([rng.next_u64(), rng.next_u64()]);
 
         // 6 inputs (x1,y1,z1, x2,y2,z2)
         let inp_x1 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
@@ -294,9 +294,11 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
         where R: Rng
     {
         let mut offspring = parent1.clone();
+        offspring.rng().reseed([rng.next_u64(), rng.next_u64()]);
+        // XXX: reseed offspring from both parents
 
         for _ in 0..self.mate_retries + 1 {
-            let modified = match MatingMethod::random_with(&self.mating_method_weights, rng) {
+            let modified = match MatingMethod::random_with(&self.mating_method_weights, offspring.rng()) {
                 MatingMethod::MutateAddNode => {
                     let link_weight = if self.mutate_add_node_random_link_weight {
                         Some(self.link_weight_range.random_weight(rng))
@@ -304,32 +306,30 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
                         // duplicate existing node weight
                         None
                     };
-                    let hidden_node = self.random_hidden_node(rng);
-                    offspring.mutate_add_node(hidden_node, link_weight, rng)
+                    let hidden_node = self.random_hidden_node(offspring.rng());
+                    offspring.mutate_add_node(hidden_node, link_weight)
                 }
                 MatingMethod::MutateDropNode => {
-                    offspring.mutate_drop_node(self.mutate_drop_node_tournament_k, rng)
+                    offspring.mutate_drop_node(self.mutate_drop_node_tournament_k)
                 }
                 MatingMethod::MutateModifyNode => {
-                    let hidden_node = self.random_hidden_node(rng);
+                    let hidden_node = self.random_hidden_node(offspring.rng());
                     offspring.mutate_modify_node(hidden_node,
-                                                 self.mutate_modify_node_tournament_k,
-                                                 rng)
+                                                 self.mutate_modify_node_tournament_k)
                 }
                 MatingMethod::MutateConnect => {
-                    let link_weight = self.link_weight_range.random_weight(rng);
-                    offspring.mutate_connect(link_weight, rng)
+                    let link_weight = self.link_weight_range.random_weight(offspring.rng());
+                    offspring.mutate_connect(link_weight)
                 }
-                MatingMethod::MutateDisconnect => offspring.mutate_disconnect(rng),
+                MatingMethod::MutateDisconnect => offspring.mutate_disconnect(),
                 MatingMethod::MutateWeights => {
                     let modifications = offspring.mutate_weights(self.mutate_element_prob,
                                                                  &self.weight_perturbance,
-                                                                 &self.link_weight_range,
-                                                                 rng);
+                                                                 &self.link_weight_range);
                     modifications != 0
                 }
                 MatingMethod::CrossoverWeights => {
-                    let modifications = offspring.crossover_weights(parent2, rng);
+                    let modifications = offspring.crossover_weights(parent2);
                     modifications != 0
                 }
             };

@@ -18,7 +18,7 @@ cppn = {git = "https://github.com/mneumann/cppn-rs"}
 acyclic-network = {git = "https://github.com/mneumann/acyclic-network-rs"}
 graph-neighbor-matching = "0.6.1"
 nsga2 = {git = "https://github.com/mneumann/nsga2-rs"}
-#pcg = { git = "https://github.com/codahale/pcg.git" }
+pcg = { git = "https://github.com/mneumann/pcg.git", branch = "clone_debug" }
 hamming = "0.1"
 primal-bit = "0.2.3"
 closed01 = "0.4"
