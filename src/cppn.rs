@@ -115,6 +115,25 @@ pub struct CppnDriver<'a, DOMFIT, G, P, T, NETBUILDER>
     pub substrate_configuration: SubstrateConfiguration<'a, P, T>,
     pub domain_fitness: &'a DOMFIT,
     pub _netbuilder: PhantomData<NETBUILDER>,
+
+    /// Create genomes which are already connected
+    pub start_connected: bool,
+
+    /// The initial connections are random within this range
+    pub start_link_weight_range: WeightRange,
+
+    /// Create a gaussian seed node for the symmetry of x-axis with the given weight
+    pub start_symmetry_x: Option<f64>,
+
+    /// Create a gaussian seed node for the symmetry of y-axis with the given weight
+    pub start_symmetry_y: Option<f64>,
+
+    /// Create a gaussian seed node for the symmetry of z-axis with the given weight
+    pub start_symmetry_z: Option<f64>,
+
+    /// Create `start_initial_nodes` random nodes for each genome. This can be useful,
+    /// as we have a pretty low probability for adding a node.
+    pub start_initial_nodes: usize,
 }
 
 impl<'a, DOMFIT, G, P, T, NETBUILDER> CppnDriver<'a, DOMFIT, G, P, T, NETBUILDER>
@@ -146,35 +165,107 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
     /// Creates a random individual for use by the start generation.
     ///
     /// We start from a minimal topology.
+    /// If `self.start_connected` is `true`, we add some initial connections.
 
-    fn random_individual<R>(&self, _rng: &mut R) -> Self::IND
+    fn random_individual<R>(&self, rng: &mut R) -> Self::IND
         where R: Rng
     {
         let mut genome = Self::IND::new();
 
         // 6 inputs (x1,y1,z1, x2,y2,z2)
-        let _inp_x1 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
-        let _inp_y1 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
-        let _inp_z1 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
-        let _inp_x2 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
-        let _inp_y2 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
-        let _inp_z2 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
+        let inp_x1 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
+        let inp_y1 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
+        let inp_z1 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
+        let inp_x2 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
+        let inp_y2 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
+        let inp_z2 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
 
         // 1 bias node (constant input of 1.0)
         let _bias = genome.add_node(CppnNode::bias(GeometricActivationFunction::Constant1));
 
         // 4 outputs (t,w,ex,r)
-        let _out_t = genome.add_node(CppnNode::output(GeometricActivationFunction::BipolarGaussian));
-        let _out_w = genome.add_node(CppnNode::output(GeometricActivationFunction::BipolarGaussian));
-        let _out_ex = genome.add_node(CppnNode::output(GeometricActivationFunction::Linear));
-        let _out_r = genome.add_node(CppnNode::output(GeometricActivationFunction::BipolarGaussian));
+        let out_t = genome.add_node(CppnNode::output(GeometricActivationFunction::BipolarGaussian));
+        let out_w = genome.add_node(CppnNode::output(GeometricActivationFunction::BipolarGaussian));
+        let out_ex = genome.add_node(CppnNode::output(GeometricActivationFunction::Linear));
+        let out_r = genome.add_node(CppnNode::output(GeometricActivationFunction::BipolarGaussian));
 
         // make those nodes above immutable for mutation and crossover, as we need them to
         // develop the CPPN.
         genome.protect_nodes();
 
-        // XXX: Add x-distance and y-distance Gaussian seed nodes.
-        // XXX: Add initial random connections?
+        // We use `inputs` and `outputs` only when `self.start_connected` is set to `true`.
+        let mut inputs = Vec::new();
+        let mut outputs = Vec::new();
+
+        if let Some(w) = self.start_symmetry_x {
+            let sym_x = genome.add_node(CppnNode::hidden(GeometricActivationFunction::BipolarGaussian));
+            genome.add_link(inp_x1, sym_x, self.link_weight_range.clip_weight(Weight(-w)));
+            genome.add_link(inp_x2, sym_x, self.link_weight_range.clip_weight(Weight(w)));
+
+            if self.start_connected {
+                inputs.push(sym_x);
+            }
+        }
+        if let Some(w) = self.start_symmetry_y {
+            let sym_y = genome.add_node(CppnNode::hidden(GeometricActivationFunction::BipolarGaussian));
+            genome.add_link(inp_y1, sym_y, self.link_weight_range.clip_weight(Weight(-w)));
+            genome.add_link(inp_y2, sym_y, self.link_weight_range.clip_weight(Weight(w)));
+
+            if self.start_connected {
+                inputs.push(sym_y);
+            }
+        }
+        if let Some(w) = self.start_symmetry_z {
+            let sym_z = genome.add_node(CppnNode::hidden(GeometricActivationFunction::BipolarGaussian));
+            genome.add_link(inp_z1, sym_z, self.link_weight_range.clip_weight(Weight(-w)));
+            genome.add_link(inp_z2, sym_z, self.link_weight_range.clip_weight(Weight(w)));
+
+            if self.start_connected {
+                inputs.push(sym_z);
+            }
+        }
+
+        // Make sure that at least every input and every output is connected.
+        if self.start_connected {
+            inputs.push(inp_x1);
+            inputs.push(inp_x2);
+            inputs.push(inp_y1);
+            inputs.push(inp_y2);
+            inputs.push(inp_z1);
+            inputs.push(inp_z2);
+            outputs.push(out_t);
+            outputs.push(out_w);
+            outputs.push(out_ex);
+            outputs.push(out_r);
+
+            let mut connections: Vec<(usize, usize)> = Vec::new();
+            assert!(inputs.len() >= 6);
+            assert!(inputs.len() <= 9);
+            assert!(outputs.len() == 4);
+
+            // make a connection from every input to a random output
+            for (inp, _) in inputs.iter().enumerate() {
+                connections.push((inp, rng.gen_range(0, outputs.len())));
+            }
+            // make a connection from every output to a random input
+            for (outp, _) in outputs.iter().enumerate() {
+                connections.push((rng.gen_range(0, inputs.len()), outp));
+            }
+            // remove duplicates
+            connections.sort();
+            connections.dedup();
+
+            println!("connections: {:?}", connections);
+
+            // and add the connections to the genome
+            for (inp, outp) in connections {
+                genome.add_link(inputs[inp], outputs[outp], self.start_link_weight_range.random_weight(rng));
+            }
+        }
+
+        for _ in 0..self.start_initial_nodes {
+            let _ = genome.add_node(self.random_hidden_node(rng));
+        }
 
         genome
     }

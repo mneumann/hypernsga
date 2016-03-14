@@ -1,5 +1,5 @@
-- [ ] Start with a fully connected, but minimal, topology.
-- [ ] Start with x-axis seed nodes.
+- [x] Start with a fully connected, but minimal, topology.
+- [x] Start with x-axis seed nodes.
 - [ ] Choose a higher mutation rate for individuals which have a worse fitness than
       the avergage.
 - [ ] Implement a Conrod GUI for experimenting with setting configuration options
@@ -14,3 +14,7 @@
 - [ ] Make structural mutation dependent on the average node degree.
       For example, if there is a low connectivity of nodes, adding a new node is
       not a good thing.
+- [ ] Add symmetric links, which, when updated, also update their counterpart.
+- [ ] Add a fourth objective: Mutation work, which describes how much mutation has happened
+      since the beginning for that individual.
+- [ ] When adding a link, use a fixed weight for the second link

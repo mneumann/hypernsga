@@ -143,13 +143,13 @@ impl GraphSimilarity {
 
 impl DomainFitness<OwnedGraph<Neuron>> for GraphSimilarity {
     // A larger fitness means "better"
-    fn fitness(&self, graph: OwnedGraph<Neuron>) -> f32 {
+    fn fitness(&self, graph: OwnedGraph<Neuron>) -> f64 {
         let mut s = SimilarityMatrix::new(&graph, &self.target_graph, WeightedNodeColors);
         s.iterate(self.iters, self.eps);
         let assignment = s.optimal_node_assignment();
-        let score = s.score_optimal_sum_norm(Some(&assignment), ScoreNorm::MaxDegree).get();
+        let score = s.score_optimal_sum_norm(Some(&assignment), ScoreNorm::MaxDegree).get() as f64;
         if self.edge_score {
-            score * s.score_outgoing_edge_weights_sum_norm(&assignment, ScoreNorm::MaxDegree).get()
+            score * s.score_outgoing_edge_weights_sum_norm(&assignment, ScoreNorm::MaxDegree).get() as f64
         } else {
             score
         }
