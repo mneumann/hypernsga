@@ -68,7 +68,7 @@ impl<NT: NodeType> Genome<NT> {
         assert!(tournament_k > 0);
 
         let n = self.network.node_count();
-        if self.protected_nodes >= n {
+        if n <= self.protected_nodes {
             return None;
         }
 
