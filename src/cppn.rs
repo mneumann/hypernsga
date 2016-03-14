@@ -347,7 +347,14 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
     fn population_metric(&self, population: &mut RatedPopulation<Self::IND, Self::FIT>) {
         // Determine the behavioral_diversity as average hamming distance to all other individuals.
         // hamming distance is symmetric.
+
         let n = population.len();
+
+        // reset all behavioral_diversity values to 0
+        for i in 0..n {
+            population.fitness_mut()[i].behavioral_diversity = 0;
+        }
+
         for i in 0..n {
             // determine  hehavioral diversity for `i`.
             let mut diversity_i = 0;
