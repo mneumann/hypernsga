@@ -7,7 +7,8 @@ use behavioral_bitvec::BehavioralBitvec;
 use genome::Genome;
 use nsga2::driver::Driver;
 use nsga2::population::RatedPopulation;
-use fitness::{Fitness, DomainFitness};
+use nsga2::selection::{SelectNSGA, SelectNSGP};
+use fitness::{Behavior, Fitness, DomainFitness};
 use rand::Rng;
 use mating::{MatingMethod, MatingMethodWeights};
 use prob::Prob;
@@ -23,13 +24,13 @@ const CPPN_OUTPUT_NODE_WEIGHT: usize = 3;
 
 /// Develops a network out of the CPPN
 ///
-/// Returns the BehavioralBitvec and Connection Cost of the developed network
+/// Returns the Behavior and Connection Cost of the developed network
 
 fn develop_cppn<'a, P, AF, T, V>(cppn: &mut Cppn<CppnNode<AF>, Weight, ()>,
                                  substrate_config: &SubstrateConfiguration<'a, P, T>,
                                  visitor: &mut V,
                                  leo_threshold: f64)
-                                 -> (BehavioralBitvec, f64)
+                                 -> (Behavior, f64)
     where P: Position,
           AF: ActivationFunction,
           V: NetworkBuilder<POS = P, NT = T>
@@ -90,7 +91,7 @@ fn develop_cppn<'a, P, AF, T, V>(cppn: &mut Cppn<CppnNode<AF>, Weight, ()>,
         }
     }
 
-    return (bitvec, connection_cost);
+    return (Behavior{bitvec: bitvec}, connection_cost);
 }
 
 /// Determines the domain fitness of `G`
@@ -100,7 +101,7 @@ pub struct CppnDriver<'a, DOMFIT, G, P, T, NETBUILDER>
           P: Position + Sync + 'a,
           T: Sync + 'a,
           NETBUILDER: NetworkBuilder<POS = P, NT = T, Output = G> + Sync,
-          G: Sync,
+          G: Sync
 {
     pub mating_method_weights: MatingMethodWeights,
     pub activation_functions: Vec<GeometricActivationFunction>,
@@ -142,7 +143,7 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> CppnDriver<'a, DOMFIT, G, P, T, NETBUILDER
           P: Position + Sync + 'a,
           T: Sync + 'a,
           NETBUILDER: NetworkBuilder<POS = P, NT = T, Output = G> + Sync,
-          G: Sync,
+          G: Sync
 {
     fn random_hidden_node<R>(&self, rng: &mut R) -> CppnNode<GeometricActivationFunction>
         where R: Rng
@@ -158,10 +159,11 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
           P: Position + Sync + 'a,
           T: Sync + 'a,
           NETBUILDER: NetworkBuilder<POS = P, NT = T, Output = G> + Sync,
-          G: Sync,
+          G: Sync
 {
     type GENOME = CppnGenome<GeometricActivationFunction>;
     type FIT = Fitness;
+    type SELECTION = SelectNSGP;
 
     /// Creates a random individual for use by the start generation.
     ///
@@ -207,9 +209,10 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
 
         for d in 0..P::DIMENSIONS {
             if let &Some(w) = self.start_symmetry.get(d).unwrap_or(&None) {
-                let sym = genome.add_node(CppnNode::hidden(GeometricActivationFunction::BipolarGaussian));
-                let inp1 = inputs[d*2];
-                let inp2 = inputs[d*2+1];
+                let sym =
+                    genome.add_node(CppnNode::hidden(GeometricActivationFunction::BipolarGaussian));
+                let inp1 = inputs[d * 2];
+                let inp2 = inputs[d * 2 + 1];
                 genome.add_link(inp1, sym, self.link_weight_range.clip_weight(Weight(-w)));
                 genome.add_link(inp2, sym, self.link_weight_range.clip_weight(Weight(w)));
                 // XXX: should we really connect the sym node as well?
@@ -239,7 +242,9 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
 
             // and add the connections to the genome
             for (inp, outp) in connections {
-                genome.add_link(inputs[inp], outputs[outp], self.start_link_weight_range.random_weight(rng));
+                genome.add_link(inputs[inp],
+                                outputs[outp],
+                                self.start_link_weight_range.random_weight(rng));
             }
         }
 
@@ -254,19 +259,19 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
         let mut cppn = Cppn::new(ind.network());
         let mut net_builder = NETBUILDER::new();
 
-        let (behavioral_bitvec, connection_cost) = develop_cppn(&mut cppn,
-                                                                &self.substrate_configuration,
-                                                                &mut net_builder,
-                                                                self.link_expression_threshold);
+        let (behavior, connection_cost) = develop_cppn(&mut cppn,
+                                                       &self.substrate_configuration,
+                                                       &mut net_builder,
+                                                       self.link_expression_threshold);
 
         // Evaluate domain specific fitness
         let domain_fitness = self.domain_fitness.fitness(net_builder.network());
 
         Fitness {
             domain_fitness: domain_fitness,
-            behavioral_diversity: 0, // will be calculated in `population_metric`
+            behavioral_diversity: 0.0, // will be calculated in `population_metric`
             connection_cost: connection_cost,
-            behavioral_bitvec: behavioral_bitvec,
+            behavior: behavior,
         }
     }
 
@@ -297,7 +302,9 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
                                                  rng)
                 }
                 MatingMethod::MutateConnect => {
-                    let link_weight = self.link_weight_range.clip_weight(Weight(gaussian(self.link_weight_creation_sigma, rng)));
+                    let link_weight =
+                        self.link_weight_range
+                            .clip_weight(Weight(gaussian(self.link_weight_creation_sigma, rng)));
                     offspring.mutate_connect(link_weight, rng)
                 }
                 MatingMethod::MutateDisconnect => offspring.mutate_disconnect(rng),
@@ -332,18 +339,16 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
 
         // reset all behavioral_diversity values to 0
         for i in 0..n {
-            population.fitness_mut(i).behavioral_diversity = 0;
+            population.fitness_mut(i).behavioral_diversity = 0.0;
         }
 
         for i in 0..n {
             // determine  hehavioral diversity for `i`.
-            let mut diversity_i = 0;
+            let mut diversity_i = 0.0;
 
             // XXX: parallelize this loop
             for j in i + 1..n {
-                let distance = population.fitness(i)
-                                   .behavioral_bitvec
-                                   .hamming_distance(&population.fitness(j).behavioral_bitvec);
+                let distance = population.fitness(i).behavior.weighted_distance(&population.fitness(j).behavior);
                 diversity_i += distance;
                 population.fitness_mut(j).behavioral_diversity += distance;
             }

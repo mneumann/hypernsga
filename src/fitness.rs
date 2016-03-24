@@ -3,6 +3,17 @@ use nsga2::domination::Domination;
 use std::cmp::Ordering;
 use behavioral_bitvec::BehavioralBitvec;
 
+#[derive(Clone, Debug)]
+pub struct Behavior {
+    pub bitvec: BehavioralBitvec,
+}
+
+impl Behavior {
+    pub fn weighted_distance(&self, other: &Self) -> f64 {
+        self.bitvec.hamming_distance(&other.bitvec) as f64
+    }
+}
+
 /// We use a fitness composed of three objectives. Smaller values are "better".
 #[derive(Debug, Clone)]
 pub struct Fitness {
@@ -13,13 +24,13 @@ pub struct Fitness {
     ///
     /// This value is not normalized towards the number of individuals in the population,
     /// and as such is just the sum of all hamming distances.
-    pub behavioral_diversity: u64,
+    pub behavioral_diversity: f64,
 
     /// The connection cost of the generated network (smaller value is better!)
     pub connection_cost: f64,
 
     // This is used to determine the behavioral_diversity.
-    pub behavioral_bitvec: BehavioralBitvec,
+    pub behavior: Behavior,
 }
 
 impl MultiObjective for Fitness {
@@ -30,7 +41,7 @@ impl MultiObjective for Fitness {
             // higher domain_fitness is better!
             0 => self.domain_fitness.partial_cmp(&other.domain_fitness).unwrap().reverse(),
             // higher behavioral_diversity is better!
-            1 => self.behavioral_diversity.cmp(&other.behavioral_diversity).reverse(),
+            1 => self.behavioral_diversity.partial_cmp(&other.behavioral_diversity).unwrap().reverse(),
             // smaller connection_cost is better
             2 => self.connection_cost.partial_cmp(&other.connection_cost).unwrap(),
             _ => panic!(),
@@ -41,14 +52,7 @@ impl MultiObjective for Fitness {
         match objective {
             0 => self.domain_fitness - other.domain_fitness,
             1 => {
-                self.behavioral_diversity as f64 - other.behavioral_diversity as f64
-                /*
-                if self.behavioral_diversity > other.behavioral_diversity {
-                    (self.behavioral_diversity - other.behavioral_diversity) as f64
-                } else {
-                    (other.behavioral_diversity - self.behavioral_diversity) as f64
-                }
-                */
+                self.behavioral_diversity - other.behavioral_diversity
             }
             2 => self.connection_cost - other.connection_cost,
             _ => panic!(),
@@ -74,7 +78,7 @@ impl Domination for Fitness {
             Ordering::Equal => {}
         }
 
-        match lhs.behavioral_diversity.cmp(&rhs.behavioral_diversity) {
+        match lhs.behavioral_diversity.partial_cmp(&rhs.behavioral_diversity).unwrap() {
             Ordering::Greater => {
                 // higher values are better
                 left_dom_cnt += 1;

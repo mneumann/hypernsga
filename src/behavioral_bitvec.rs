@@ -20,11 +20,16 @@ impl BehavioralBitvec {
     }
 
     #[inline]
-    pub fn push(&mut self, output: f64) {
-        if output >= 0.0 {
+    pub fn push_bit(&mut self, bit: bool) {
+        if bit {
             self.bitvec.set(self.bitpos, true);
         }
         self.bitpos += 1;
+    }
+
+    #[inline]
+    pub fn push(&mut self, output: f64) {
+        self.push_bit(output >= 0.0)
     }
 }
 
