@@ -5,7 +5,7 @@ extern crate criterion_stats;
 
 use hypernsga::graph;
 use hypernsga::domain_graph::{Neuron, NeuronNetworkBuilder, GraphSimilarity};
-use hypernsga::cppn::{CppnDriver, GeometricActivationFunction};
+use hypernsga::cppn::{CppnDriver, GeometricActivationFunction, RandomGenomeCreator};
 use hypernsga::mating::MatingMethodWeights;
 use hypernsga::prob::Prob;
 use hypernsga::weight::{WeightPerturbanceMethod, WeightRange};
@@ -73,6 +73,21 @@ fn main() {
         objective_eps: 0.01,
     };
 
+    let random_genome_creator = RandomGenomeCreator {
+        link_weight_range: WeightRange::bipolar(3.0),
+
+        start_activation_functions: vec![
+            //GeometricActivationFunction::Linear,
+            GeometricActivationFunction::BipolarGaussian,
+            GeometricActivationFunction::BipolarSigmoid,
+            GeometricActivationFunction::Sine,
+        ],
+        start_connected: false,
+        start_link_weight_range: WeightRange::bipolar(0.1),
+        start_symmetry: vec![], //Some(3.0), None, Some(3.0)],
+        start_initial_nodes: 0,
+    };
+
     let driver: CppnDriver<_,_,_,Neuron,NeuronNetworkBuilder<Position2d>> = CppnDriver {
         mating_method_weights: MatingMethodWeights {
             mutate_add_node: 5,
@@ -105,10 +120,7 @@ fn main() {
         domain_fitness: &target_opt,
         _netbuilder: PhantomData,
 
-        start_connected: false,
-        start_link_weight_range: WeightRange::bipolar(0.1),
-        start_symmetry: vec![], //Some(3.0), None, Some(3.0)],
-        start_initial_nodes: 0,
+        random_genome_creator: random_genome_creator,
     };
 
     driver.run(&mut rng, &driver_config, &selection, &|iteration, duration, num_solutions, population| {

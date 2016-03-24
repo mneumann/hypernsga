@@ -11,7 +11,7 @@ extern crate time;
 
 use hypernsga::graph;
 use hypernsga::domain_graph::{Neuron, NeuronNetworkBuilder, GraphSimilarity};
-use hypernsga::cppn::{CppnDriver, GeometricActivationFunction};
+use hypernsga::cppn::{CppnDriver, GeometricActivationFunction, RandomGenomeCreator};
 use hypernsga::mating::MatingMethodWeights;
 use hypernsga::prob::Prob;
 use hypernsga::weight::{WeightPerturbanceMethod, WeightRange};
@@ -32,25 +32,38 @@ mod support;
 
 const CLEAR_COLOR: (f32, f32, f32, f32) = (1.0, 1.0, 1.0, 1.0);
 
-fn gui<'a>(ui: &Ui<'a>, iteration: usize, best_fitness: f64, running: &mut bool) {
+struct State {
+    iteration: usize,
+    best_fitness: f64,
+    running: bool,
+}
+
+fn gui<'a>(ui: &Ui<'a>, state: &mut State)
+{
     ui.window(im_str!("Evolutionary Graph Optimization"))
         .size((300.0, 100.0), ImGuiSetCond_FirstUseEver)
         .build(|| {
-            ui.text(im_str!("Iteration: {}", iteration));
-            ui.text(im_str!("Best Fitness: {:?}", best_fitness));
-            ui.separator();
-            if *running {
-               if ui.small_button(im_str!("STOP")) {
-                   *running = false;
-               }
-            } else {
-               if ui.small_button(im_str!("START")) {
-                   *running = true;
-               }
+            if ui.collapsing_header(im_str!("General")).build() {
+                ui.text(im_str!("Iteration: {}", state.iteration));
+                ui.text(im_str!("Best Fitness: {:?}", state.best_fitness));
+                ui.separator();
+                if state.running {
+                   if ui.small_button(im_str!("STOP")) {
+                       state.running = false;
+                   }
+                } else {
+                   if ui.small_button(im_str!("START")) {
+                       state.running = true;
+                   }
+                }
             }
-            ui.separator();
-            let mouse_pos = ui.imgui().mouse_pos();
-            ui.text(im_str!("Mouse Position: ({:.1},{:.1})", mouse_pos.0, mouse_pos.1));
+            if ui.collapsing_header(im_str!("EA Settings")).build() {
+                //ui.slider_f32(im_str!("Link expression threshold"), )
+            }
+
+            //ui.separator();
+            //let mouse_pos = ui.imgui().mouse_pos();
+            //ui.text(im_str!("Mouse Position: ({:.1},{:.1})", mouse_pos.0, mouse_pos.1));
         })
 }
 
@@ -112,7 +125,22 @@ fn main() {
         objective_eps: 0.01,
     };
 
-    let driver: CppnDriver<_,_,_,Neuron,NeuronNetworkBuilder<Position2d>> = CppnDriver {
+    let random_genome_creator = RandomGenomeCreator {
+        link_weight_range: WeightRange::bipolar(3.0),
+
+        start_activation_functions: vec![
+            //GeometricActivationFunction::Linear,
+            GeometricActivationFunction::BipolarGaussian,
+            GeometricActivationFunction::BipolarSigmoid,
+            GeometricActivationFunction::Sine,
+        ],
+        start_connected: false,
+        start_link_weight_range: WeightRange::bipolar(0.1),
+        start_symmetry: vec![], //Some(3.0), None, Some(3.0)],
+        start_initial_nodes: 0,
+    };
+
+    let mut driver: CppnDriver<_,_,_,Neuron,NeuronNetworkBuilder<Position2d>> = CppnDriver {
         mating_method_weights: MatingMethodWeights {
             mutate_add_node: 5,
             mutate_drop_node: 0,
@@ -144,13 +172,8 @@ fn main() {
         domain_fitness: &target_opt,
         _netbuilder: PhantomData,
 
-        start_connected: false,
-        start_link_weight_range: WeightRange::bipolar(0.1),
-        start_symmetry: vec![], //Some(3.0), None, Some(3.0)],
-        start_initial_nodes: 0,
+        random_genome_creator: random_genome_creator,
     };
-
-    let mut generation: usize = 0;
 
     // create `generation 0`
     let mut parents = {
@@ -158,30 +181,34 @@ fn main() {
         driver.merge_and_select(driver.empty_parent_population(), initial, &mut rng, &driver_config, &selection)
     };
 
-    let mut best_fitness = {
+    let best_fitness = {
             let best_individual = parents.individuals().iter().max_by_key(|ind| (ind.fitness().domain_fitness * 1_000_000.0) as usize);
             best_individual.map(|ind| ind.fitness().domain_fitness).unwrap_or(0.0)
     };
 
-    let mut running = true;
+    let mut state = State {
+        running: false,
+        iteration: 0,
+        best_fitness: best_fitness
+    };
 
     loop {
         {
             support.render(CLEAR_COLOR, |ui| {
-                gui(ui, generation, best_fitness, &mut running);
+                gui(ui, &mut state);
             });
             let active = support.update_events();
             if !active { break }
         }
 
-        if running {
+        if state.running {
             // create next generation
-            generation += 1;
+            state.iteration += 1;
             let offspring = driver.reproduce(&parents, &mut rng, &driver_config);
             parents = driver.merge_and_select(parents, offspring, &mut rng, &driver_config, &selection);
 
             let best_individual = parents.individuals().iter().max_by_key(|ind| (ind.fitness().domain_fitness * 1_000_000.0) as usize);
-            best_fitness = best_individual.map(|ind| ind.fitness().domain_fitness).unwrap_or(0.0);
+            state.best_fitness = best_individual.map(|ind| ind.fitness().domain_fitness).unwrap_or(0.0);
         }
     }
 }
