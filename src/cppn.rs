@@ -1,7 +1,7 @@
 use cppn_ext::cppn::{Cppn, CppnNode};
 use cppn_ext::activation_function::ActivationFunction;
 pub use cppn_ext::activation_function::GeometricActivationFunction;
-use weight::{Weight, WeightRange, WeightPerturbanceMethod};
+use weight::{Weight, WeightRange, WeightPerturbanceMethod, gaussian};
 use substrate::{Position, SubstrateConfiguration};
 use behavioral_bitvec::BehavioralBitvec;
 use genome::Genome;
@@ -17,8 +17,8 @@ use std::marker::PhantomData;
 pub type CppnGenome<AF> where AF: ActivationFunction = Genome<CppnNode<AF>>;
 
 const CPPN_OUTPUT_LINK_WEIGHT1: usize = 0;
-const CPPN_OUTPUT_LINK_WEIGHT2: usize = 1;
-const CPPN_OUTPUT_LINK_EXPRESSION: usize = 2;
+const CPPN_OUTPUT_LINK_EXPRESSION: usize = 1;
+const CPPN_OUTPUT_LINK_WEIGHT2: usize = 2;
 const CPPN_OUTPUT_NODE_WEIGHT: usize = 3;
 
 /// Develops a network out of the CPPN
@@ -34,15 +34,15 @@ fn develop_cppn<'a, P, AF, T, V>(cppn: &mut Cppn<CppnNode<AF>, Weight, ()>,
           AF: ActivationFunction,
           V: NetworkBuilder<POS = P, NT = T>
 {
-    // our CPPN has four outputs: link weight 1, link weight 2, link expression output, node weight
-    assert!(cppn.output_count() == 4);
-    assert!(cppn.input_count() == 6);
+    // our CPPN has at least two outputs: link weight 1, link expression. optional: link weight 2, node weight
+    assert!(cppn.output_count() >= 2);
+    assert!(cppn.input_count() == P::DIMENSIONS * 2);
 
     let nodes = substrate_config.nodes();
     let links = substrate_config.links();
     let null_position = substrate_config.null_position();
 
-    let mut bitvec = BehavioralBitvec::new(4 * (nodes.len() + links.len()));
+    let mut bitvec = BehavioralBitvec::new(cppn.output_count() * (nodes.len() + links.len()));
     let mut connection_cost = 0.0;
 
     // First visit all nodes
@@ -52,13 +52,15 @@ fn develop_cppn<'a, P, AF, T, V>(cppn: &mut Cppn<CppnNode<AF>, Weight, ()>,
         cppn.process(&inputs[..]);
 
         let link_weight1 = cppn.read_output(CPPN_OUTPUT_LINK_WEIGHT1).unwrap();
-        let link_weight2 = cppn.read_output(CPPN_OUTPUT_LINK_WEIGHT2).unwrap();
         let link_expression = cppn.read_output(CPPN_OUTPUT_LINK_EXPRESSION).unwrap();
-        let node_weight = cppn.read_output(CPPN_OUTPUT_NODE_WEIGHT).unwrap();
+
+        // link_weight2 and node_weight are optional. in case they don't exist, set them to 0.0
+        let link_weight2 = cppn.read_output(CPPN_OUTPUT_LINK_WEIGHT2).unwrap_or(0.0);
+        let node_weight = cppn.read_output(CPPN_OUTPUT_NODE_WEIGHT).unwrap_or(0.0);
 
         bitvec.push(link_weight1);
-        bitvec.push(link_weight2);
         bitvec.push(link_expression);
+        bitvec.push(link_weight2);
         bitvec.push(node_weight);
 
         visitor.add_node(node, node_weight)
@@ -69,13 +71,15 @@ fn develop_cppn<'a, P, AF, T, V>(cppn: &mut Cppn<CppnNode<AF>, Weight, ()>,
         cppn.process(&inputs[..]);
 
         let link_weight1 = cppn.read_output(CPPN_OUTPUT_LINK_WEIGHT1).unwrap();
-        let link_weight2 = cppn.read_output(CPPN_OUTPUT_LINK_WEIGHT2).unwrap();
         let link_expression = cppn.read_output(CPPN_OUTPUT_LINK_EXPRESSION).unwrap();
-        let node_weight = cppn.read_output(CPPN_OUTPUT_NODE_WEIGHT).unwrap();
+
+        // link_weight2 and node_weight are optional. in case they don't exist, set them to 0.0
+        let link_weight2 = cppn.read_output(CPPN_OUTPUT_LINK_WEIGHT2).unwrap_or(0.0);
+        let node_weight = cppn.read_output(CPPN_OUTPUT_NODE_WEIGHT).unwrap_or(0.0);
 
         bitvec.push(link_weight1);
-        bitvec.push(link_weight2);
         bitvec.push(link_expression);
+        bitvec.push(link_weight2);
         bitvec.push(node_weight);
 
         if link_expression > leo_threshold {
@@ -103,6 +107,7 @@ pub struct CppnDriver<'a, DOMFIT, G, P, T, NETBUILDER>
     pub mutate_element_prob: Prob,
     pub weight_perturbance: WeightPerturbanceMethod,
     pub link_weight_range: WeightRange,
+    pub link_weight_creation_sigma: f64,
 
     pub mutate_add_node_random_link_weight: bool,
     pub mutate_drop_node_tournament_k: usize,
@@ -122,14 +127,10 @@ pub struct CppnDriver<'a, DOMFIT, G, P, T, NETBUILDER>
     /// The initial connections are random within this range
     pub start_link_weight_range: WeightRange,
 
-    /// Create a gaussian seed node for the symmetry of x-axis with the given weight
-    pub start_symmetry_x: Option<f64>,
-
-    /// Create a gaussian seed node for the symmetry of y-axis with the given weight
-    pub start_symmetry_y: Option<f64>,
-
-    /// Create a gaussian seed node for the symmetry of z-axis with the given weight
-    pub start_symmetry_z: Option<f64>,
+    /// Create a gaussian seed node for the symmetry of d-th axis with the given weight
+    /// vec![Some(1.0), None, Some(2.0)] would for example create a node for symmetry of x-axis and
+    /// z-axis.
+    pub start_symmetry: Vec<Option<f64>>,
 
     /// Create `start_initial_nodes` random nodes for each genome. This can be useful,
     /// as we have a pretty low probability for adding a node.
@@ -159,7 +160,7 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
           NETBUILDER: NetworkBuilder<POS = P, NT = T, Output = G> + Sync,
           G: Sync,
 {
-    type IND = CppnGenome<GeometricActivationFunction>;
+    type GENOME = CppnGenome<GeometricActivationFunction>;
     type FIT = Fitness;
 
     /// Creates a random individual for use by the start generation.
@@ -167,89 +168,68 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
     /// We start from a minimal topology.
     /// If `self.start_connected` is `true`, we add some initial connections.
 
-    fn random_individual<R>(&self, rng: &mut R) -> Self::IND
+    fn random_genome<R>(&self, rng: &mut R) -> Self::GENOME
         where R: Rng
     {
-        let mut genome = Self::IND::new();
+        let mut genome = Self::GENOME::new();
 
-        // 6 inputs (x1,y1,z1, x2,y2,z2)
-        let inp_x1 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
-        let inp_y1 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
-        let inp_z1 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
-        let inp_x2 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
-        let inp_y2 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
-        let inp_z2 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
-
-        // 1 bias node (constant input of 1.0)
-        let _bias = genome.add_node(CppnNode::bias(GeometricActivationFunction::Constant1));
-
-        // 4 outputs (t,w,ex,r)
-        let out_t = genome.add_node(CppnNode::output(GeometricActivationFunction::BipolarGaussian));
-        let out_w = genome.add_node(CppnNode::output(GeometricActivationFunction::BipolarGaussian));
-        let out_ex = genome.add_node(CppnNode::output(GeometricActivationFunction::Linear));
-        let out_r = genome.add_node(CppnNode::output(GeometricActivationFunction::BipolarGaussian));
-
-        // make those nodes above immutable for mutation and crossover, as we need them to
-        // develop the CPPN.
-        genome.protect_nodes();
-
-        // We use `inputs` and `outputs` only when `self.start_connected` is set to `true`.
         let mut inputs = Vec::new();
         let mut outputs = Vec::new();
 
-        if let Some(w) = self.start_symmetry_x {
-            let sym_x = genome.add_node(CppnNode::hidden(GeometricActivationFunction::BipolarGaussian));
-            genome.add_link(inp_x1, sym_x, self.link_weight_range.clip_weight(Weight(-w)));
-            genome.add_link(inp_x2, sym_x, self.link_weight_range.clip_weight(Weight(w)));
+        // for every dimension we use two inputs e.g. (x1, x2), each for the other end of the
+        // connection
 
-            if self.start_connected {
-                inputs.push(sym_x);
-            }
+        for _d in 0..P::DIMENSIONS {
+            let inp1 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
+            let inp2 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
+
+            inputs.push(inp1);
+            inputs.push(inp2);
         }
-        if let Some(w) = self.start_symmetry_y {
-            let sym_y = genome.add_node(CppnNode::hidden(GeometricActivationFunction::BipolarGaussian));
-            genome.add_link(inp_y1, sym_y, self.link_weight_range.clip_weight(Weight(-w)));
-            genome.add_link(inp_y2, sym_y, self.link_weight_range.clip_weight(Weight(w)));
 
-            if self.start_connected {
-                inputs.push(sym_y);
-            }
-        }
-        if let Some(w) = self.start_symmetry_z {
-            let sym_z = genome.add_node(CppnNode::hidden(GeometricActivationFunction::BipolarGaussian));
-            genome.add_link(inp_z1, sym_z, self.link_weight_range.clip_weight(Weight(-w)));
-            genome.add_link(inp_z2, sym_z, self.link_weight_range.clip_weight(Weight(w)));
+        // 1 bias node (constant input of 1.0)
+        let bias = genome.add_node(CppnNode::bias(GeometricActivationFunction::Constant1));
+        inputs.push(bias);
 
-            if self.start_connected {
-                inputs.push(sym_z);
+        // 4 outputs (t,ex,w,r)
+        let out_t = genome.add_node(CppnNode::output(GeometricActivationFunction::BipolarGaussian));
+        let out_ex = genome.add_node(CppnNode::output(GeometricActivationFunction::Linear));
+        let out_w = genome.add_node(CppnNode::output(GeometricActivationFunction::BipolarGaussian));
+        let out_r = genome.add_node(CppnNode::output(GeometricActivationFunction::BipolarGaussian));
+        outputs.push(out_t);
+        outputs.push(out_ex);
+        outputs.push(out_w);
+        outputs.push(out_r);
+
+        // make those nodes above immutable for mutation and crossover, as we need them to develop
+        // the CPPN.
+        genome.protect_nodes();
+
+        for d in 0..P::DIMENSIONS {
+            if let &Some(w) = self.start_symmetry.get(d).unwrap_or(&None) {
+                let sym = genome.add_node(CppnNode::hidden(GeometricActivationFunction::BipolarGaussian));
+                let inp1 = inputs[d*2];
+                let inp2 = inputs[d*2+1];
+                genome.add_link(inp1, sym, self.link_weight_range.clip_weight(Weight(-w)));
+                genome.add_link(inp2, sym, self.link_weight_range.clip_weight(Weight(w)));
+                // XXX: should we really connect the sym node as well?
+                inputs.push(sym);
             }
         }
 
         // Make sure that at least every input and every output is connected.
         if self.start_connected {
-            inputs.push(inp_x1);
-            inputs.push(inp_x2);
-            inputs.push(inp_y1);
-            inputs.push(inp_y2);
-            inputs.push(inp_z1);
-            inputs.push(inp_z2);
-            outputs.push(out_t);
-            outputs.push(out_w);
-            outputs.push(out_ex);
-            outputs.push(out_r);
-
             let mut connections: Vec<(usize, usize)> = Vec::new();
-            assert!(inputs.len() >= 6);
-            assert!(inputs.len() <= 9);
-            assert!(outputs.len() == 4);
 
             // make a connection from every input to a random output
             for (inp, _) in inputs.iter().enumerate() {
-                connections.push((inp, rng.gen_range(0, outputs.len())));
+                let outp = rng.gen_range(0, outputs.len());
+                connections.push((inp, outp));
             }
             // make a connection from every output to a random input
             for (outp, _) in outputs.iter().enumerate() {
-                connections.push((rng.gen_range(0, inputs.len()), outp));
+                let inp = rng.gen_range(0, inputs.len());
+                connections.push((inp, outp));
             }
             // remove duplicates
             connections.sort();
@@ -270,7 +250,7 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
         genome
     }
 
-    fn fitness(&self, ind: &Self::IND) -> Self::FIT {
+    fn fitness(&self, ind: &Self::GENOME) -> Self::FIT {
         let mut cppn = Cppn::new(ind.network());
         let mut net_builder = NETBUILDER::new();
 
@@ -290,7 +270,7 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
         }
     }
 
-    fn mate<R>(&self, rng: &mut R, parent1: &Self::IND, parent2: &Self::IND) -> Self::IND
+    fn mate<R>(&self, rng: &mut R, parent1: &Self::GENOME, parent2: &Self::GENOME) -> Self::GENOME
         where R: Rng
     {
         let mut offspring = parent1.clone();
@@ -317,7 +297,7 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
                                                  rng)
                 }
                 MatingMethod::MutateConnect => {
-                    let link_weight = self.link_weight_range.random_weight(rng);
+                    let link_weight = self.link_weight_range.clip_weight(Weight(gaussian(self.link_weight_creation_sigma, rng)));
                     offspring.mutate_connect(link_weight, rng)
                 }
                 MatingMethod::MutateDisconnect => offspring.mutate_disconnect(rng),
@@ -344,7 +324,7 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
         return offspring;
     }
 
-    fn population_metric(&self, population: &mut RatedPopulation<Self::IND, Self::FIT>) {
+    fn population_metric(&self, population: &mut RatedPopulation<Self::GENOME, Self::FIT>) {
         // Determine the behavioral_diversity as average hamming distance to all other individuals.
         // hamming distance is symmetric.
 
@@ -352,7 +332,7 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
 
         // reset all behavioral_diversity values to 0
         for i in 0..n {
-            population.fitness_mut()[i].behavioral_diversity = 0;
+            population.fitness_mut(i).behavioral_diversity = 0;
         }
 
         for i in 0..n {
@@ -361,14 +341,14 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
 
             // XXX: parallelize this loop
             for j in i + 1..n {
-                let distance = population.fitness()[i]
+                let distance = population.fitness(i)
                                    .behavioral_bitvec
-                                   .hamming_distance(&population.fitness()[j].behavioral_bitvec);
+                                   .hamming_distance(&population.fitness(j).behavioral_bitvec);
                 diversity_i += distance;
-                population.fitness_mut()[j].behavioral_diversity += distance;
+                population.fitness_mut(j).behavioral_diversity += distance;
             }
 
-            population.fitness_mut()[i].behavioral_diversity = diversity_i;
+            population.fitness_mut(i).behavioral_diversity = diversity_i;
         }
     }
 }
