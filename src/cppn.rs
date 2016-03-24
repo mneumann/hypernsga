@@ -108,7 +108,6 @@ pub struct CppnDriver<'a, DOMFIT, G, P, T, NETBUILDER>
           NETBUILDER: NetworkBuilder<POS = P, NT = T, Output = G> + Sync,
           G: Sync
 {
-
     pub link_expression_threshold: f64,
 
     pub substrate_configuration: SubstrateConfiguration<'a, P, T>,
@@ -168,31 +167,7 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
     }
 
     fn population_metric(&self, population: &mut RatedPopulation<Self::GENOME, Self::FIT>) {
-        // Determine the behavioral_diversity as average hamming distance to all other individuals.
-        // hamming distance is symmetric.
-
-        let n = population.len();
-
-        // reset all behavioral_diversity values to 0
-        for i in 0..n {
-            population.fitness_mut(i).behavioral_diversity = 0.0;
-        }
-
-        for i in 0..n {
-            // determine  hehavioral diversity for `i`.
-            let mut diversity_i = 0.0;
-
-            // XXX: parallelize this loop
-            for j in i + 1..n {
-                let distance = population.fitness(i)
-                                         .behavior
-                                         .weighted_distance(&population.fitness(j).behavior);
-                diversity_i += distance;
-                population.fitness_mut(j).behavioral_diversity += distance;
-            }
-
-            population.fitness_mut(i).behavioral_diversity = diversity_i;
-        }
+        PopulationFitness.apply(population);
     }
 }
 
@@ -334,7 +309,7 @@ impl Reproduction {
         CppnNode::hidden(af)
     }
 
-    fn mate<R>(&self, rng: &mut R, parent1: &G, parent2: &G) -> G
+    pub fn mate<R>(&self, rng: &mut R, parent1: &G, parent2: &G) -> G
         where R: Rng
     {
         let mut offspring = parent1.clone();
@@ -391,3 +366,57 @@ impl Reproduction {
     }
 }
 
+pub struct Expression {
+    pub link_expression_threshold: f64,
+}
+
+impl Expression {
+    pub fn express<'a, NETBUILDER, POS, NT, GRAPH>(&self,
+                                                   ind: &G,
+                                                   net_builder: &mut NETBUILDER,
+                                                   substrate_config: &SubstrateConfiguration<'a,
+                                                                                             POS,
+                                                                                             NT>)
+                                                   -> (Behavior, f64)
+        where NETBUILDER: NetworkBuilder<POS = POS, NT = NT, Output = GRAPH>,
+              POS: Position
+    {
+        let mut cppn = Cppn::new(ind.network());
+        develop_cppn(&mut cppn,
+                     substrate_config,
+                     net_builder,
+                     self.link_expression_threshold)
+    }
+}
+
+pub struct PopulationFitness;
+
+impl PopulationFitness {
+    pub fn apply(&self, population: &mut RatedPopulation<G, Fitness>) {
+        // Determine the behavioral_diversity as average hamming distance to all other individuals.
+        // hamming distance is symmetric.
+
+        let n = population.len();
+
+        // reset all behavioral_diversity values to 0
+        for i in 0..n {
+            population.fitness_mut(i).behavioral_diversity = 0.0;
+        }
+
+        for i in 0..n {
+            // determine  hehavioral diversity for `i`.
+            let mut diversity_i = 0.0;
+
+            // XXX: parallelize this loop
+            for j in i + 1..n {
+                let distance = population.fitness(i)
+                                         .behavior
+                                         .weighted_distance(&population.fitness(j).behavior);
+                diversity_i += distance;
+                population.fitness_mut(j).behavioral_diversity += distance;
+            }
+
+            population.fitness_mut(i).behavioral_diversity = diversity_i;
+        }
+    }
+}
