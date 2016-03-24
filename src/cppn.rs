@@ -49,7 +49,6 @@ fn develop_cppn<'a, P, AF, T, V>(cppn: &mut Cppn<CppnNode<AF>, Weight, ()>,
         bv_link_expression: BehavioralBitvec::new(links.len()),
         bv_node_weight:     BehavioralBitvec::new(nodes.len()),
     };
-    //let mut bitvec = BehavioralBitvec::new(cppn.output_count() * (nodes.len() + links.len()));
 
     let mut connection_cost = 0.0;
 

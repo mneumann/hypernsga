@@ -12,15 +12,19 @@ use hypernsga::weight::{WeightPerturbanceMethod, WeightRange};
 use hypernsga::substrate::{Substrate, Position3d, Position2d, NodeConnectivity};
 use hypernsga::distribute::DistributeInterval;
 use nsga2::driver::{Driver, DriverConfig};
+use nsga2::selection::{SelectNSGP};
 use std::marker::PhantomData;
 use std::f64::INFINITY;
 use criterion_stats::univariate::Sample;
+use std::env;
 
 fn main() {
     let mut rng = rand::thread_rng();
+    let graph_file = env::args().nth(1).unwrap();
+    println!("graph: {}", graph_file);
 
     let target_opt = GraphSimilarity {
-        target_graph: graph::load_graph_normalized("nets/skorpion.gml"),
+        target_graph: graph::load_graph_normalized(&graph_file),
         edge_score: true,
         iters: 50,
         eps: 0.01,
@@ -65,6 +69,10 @@ fn main() {
         parallel_weight: INFINITY,
     };
 
+    let selection = SelectNSGP {
+        objective_eps: 0.01,
+    };
+
     let driver: CppnDriver<_,_,_,Neuron,NeuronNetworkBuilder<Position2d>> = CppnDriver {
         mating_method_weights: MatingMethodWeights {
             mutate_add_node: 5,
@@ -91,7 +99,7 @@ fn main() {
         mutate_modify_node_tournament_k: 2,
         mate_retries: 100,
 
-        link_expression_threshold: 0.0,
+        link_expression_threshold: 0.01,
 
         substrate_configuration: substrate.to_configuration(),
         domain_fitness: &target_opt,
@@ -103,7 +111,7 @@ fn main() {
         start_initial_nodes: 0,
     };
 
-    driver.run(&mut rng, &driver_config, &|iteration, duration, num_solutions, population| {
+    driver.run(&mut rng, &driver_config, &selection, &|iteration, duration, num_solutions, population| {
         println!("iter: {} time: {}ms solutions: {}", iteration, duration / 1000_000, num_solutions);
         let behavioral: Vec<_> = population.individuals().iter().map(|ind| ind.fitness().behavioral_diversity as f64).collect();
         let stat = Sample::new(&behavioral);
