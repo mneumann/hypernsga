@@ -32,12 +32,22 @@ mod support;
 
 const CLEAR_COLOR: (f32, f32, f32, f32) = (1.0, 1.0, 1.0, 1.0);
 
-fn gui<'a>(ui: &Ui<'a>, iteration: usize, best_fitness: f64) {
+fn gui<'a>(ui: &Ui<'a>, iteration: usize, best_fitness: f64, running: &mut bool) {
     ui.window(im_str!("Evolutionary Graph Optimization"))
         .size((300.0, 100.0), ImGuiSetCond_FirstUseEver)
         .build(|| {
             ui.text(im_str!("Iteration: {}", iteration));
             ui.text(im_str!("Best Fitness: {:?}", best_fitness));
+            ui.separator();
+            if *running {
+               if ui.small_button(im_str!("STOP")) {
+                   *running = false;
+               }
+            } else {
+               if ui.small_button(im_str!("START")) {
+                   *running = true;
+               }
+            }
             ui.separator();
             let mouse_pos = ui.imgui().mouse_pos();
             ui.text(im_str!("Mouse Position: ({:.1},{:.1})", mouse_pos.0, mouse_pos.1));
@@ -148,21 +158,30 @@ fn main() {
         driver.merge_and_select(driver.empty_parent_population(), initial, &mut rng, &driver_config, &selection)
     };
 
+    let mut best_fitness = {
+            let best_individual = parents.individuals().iter().max_by_key(|ind| (ind.fitness().domain_fitness * 1_000_000.0) as usize);
+            best_individual.map(|ind| ind.fitness().domain_fitness).unwrap_or(0.0)
+    };
+
+    let mut running = true;
+
     loop {
         {
-            let best_individual = parents.individuals().iter().max_by_key(|ind| (ind.fitness().domain_fitness * 1_000_000.0) as usize);
-            let best_fitness = best_individual.map(|ind| ind.fitness().domain_fitness).unwrap_or(0.0);
-
             support.render(CLEAR_COLOR, |ui| {
-                gui(ui, generation, best_fitness);
+                gui(ui, generation, best_fitness, &mut running);
             });
             let active = support.update_events();
             if !active { break }
         }
 
-        // create next generation
-        generation += 1;
-        let offspring = driver.reproduce(&parents, &mut rng, &driver_config);
-        parents = driver.merge_and_select(parents, offspring, &mut rng, &driver_config, &selection);
+        if running {
+            // create next generation
+            generation += 1;
+            let offspring = driver.reproduce(&parents, &mut rng, &driver_config);
+            parents = driver.merge_and_select(parents, offspring, &mut rng, &driver_config, &selection);
+
+            let best_individual = parents.individuals().iter().max_by_key(|ind| (ind.fitness().domain_fitness * 1_000_000.0) as usize);
+            best_fitness = best_individual.map(|ind| ind.fitness().domain_fitness).unwrap_or(0.0);
+        }
     }
 }
