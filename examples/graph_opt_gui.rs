@@ -12,19 +12,17 @@ extern crate time;
 use hypernsga::graph;
 use hypernsga::domain_graph::{Neuron, NeuronNetworkBuilder, GraphSimilarity};
 use hypernsga::network_builder::NetworkBuilder;
-use hypernsga::cppn::{CppnDriver, GeometricActivationFunction, RandomGenomeCreator, Reproduction,
-                      Expression, G, PopulationFitness};
+use hypernsga::cppn::{GeometricActivationFunction, RandomGenomeCreator, Reproduction,
+Expression, G, PopulationFitness};
 use hypernsga::fitness::{Fitness, DomainFitness};
 use hypernsga::mating::MatingMethodWeights;
 use hypernsga::prob::Prob;
 use hypernsga::weight::{WeightPerturbanceMethod, WeightRange};
 use hypernsga::substrate::{Substrate, SubstrateConfiguration, Position, Position3d, Position2d,
-                           NodeConnectivity};
+NodeConnectivity};
 use hypernsga::distribute::DistributeInterval;
-use nsga2::driver::{Driver, DriverConfig};
 use nsga2::selection::SelectNSGP;
 use nsga2::population::{UnratedPopulation, RatedPopulation, RankedPopulation};
-use std::marker::PhantomData;
 use std::f64::INFINITY;
 use criterion_stats::univariate::Sample;
 use std::env;
@@ -40,42 +38,69 @@ struct State {
     iteration: usize,
     best_fitness: f64,
     running: bool,
+    mu: i32,
+    lambda: i32,
+    k: i32,
+    mutate_add_node: i32,
+    mutate_drop_node: i32,
+    mutate_modify_node: i32,
+    mutate_connect: i32,
+    mutate_disconnect: i32,
+    mutate_weights: i32,
+    //crossover_weights: 0,
+}
+
+struct EvoConfig {
+    mu: usize,
+    lambda: usize,
+    k: usize,
+    num_objectives: usize,
 }
 
 fn gui<'a>(ui: &Ui<'a>, state: &mut State) {
     ui.window(im_str!("Evolutionary Graph Optimization"))
-      .size((300.0, 100.0), ImGuiSetCond_FirstUseEver)
-      .build(|| {
-          if ui.collapsing_header(im_str!("General")).build() {
-              ui.text(im_str!("Iteration: {}", state.iteration));
-              ui.text(im_str!("Best Fitness: {:?}", state.best_fitness));
-              ui.separator();
-              if state.running {
-                  if ui.small_button(im_str!("STOP")) {
-                      state.running = false;
-                  }
-              } else {
-                  if ui.small_button(im_str!("START")) {
-                      state.running = true;
-                  }
-              }
-          }
-          if ui.collapsing_header(im_str!("EA Settings")).build() {
-              // ui.slider_f32(im_str!("Link expression threshold"), )
-          }
+        .size((300.0, 100.0), ImGuiSetCond_FirstUseEver)
+        .build(|| {
+            if ui.collapsing_header(im_str!("General")).build() {
+                ui.text(im_str!("Iteration: {}", state.iteration));
+                ui.text(im_str!("Best Fitness: {:?}", state.best_fitness));
+                ui.separator();
+                if state.running {
+                    if ui.small_button(im_str!("STOP")) {
+                        state.running = false;
+                    }
+                } else {
+                    if ui.small_button(im_str!("START")) {
+                        state.running = true;
+                    }
+                }
+            }
+            if ui.collapsing_header(im_str!("Population Settings")).build() {
+                ui.slider_i32(im_str!("Population Size"), &mut state.mu, state.k, 1000).build();
+                ui.slider_i32(im_str!("Offspring Size"), &mut state.lambda, 1, 1000).build();
+                ui.slider_i32(im_str!("Tournament Size"), &mut state.k, 1, state.mu).build();
+            }
+            if ui.collapsing_header(im_str!("Mutate Probability")).build() {
+                ui.slider_i32(im_str!("Weights"), &mut state.mutate_weights, 1, 1000).build();
+                ui.slider_i32(im_str!("Add Node"), &mut state.mutate_add_node, 0, 1000).build();
+                ui.slider_i32(im_str!("Drop Node"), &mut state.mutate_drop_node, 0, 1000).build();
+                ui.slider_i32(im_str!("Modify Node"), &mut state.mutate_modify_node, 0, 1000).build();
+                ui.slider_i32(im_str!("Connect"), &mut state.mutate_connect, 0, 1000).build();
+                ui.slider_i32(im_str!("Disconnect"), &mut state.mutate_disconnect, 0, 1000).build();
+            }
 
-          // ui.separator();
-          // let mouse_pos = ui.imgui().mouse_pos();
-          // ui.text(im_str!("Mouse Position: ({:.1},{:.1})", mouse_pos.0, mouse_pos.1));
-      })
+            // ui.separator();
+            // let mouse_pos = ui.imgui().mouse_pos();
+            // ui.text(im_str!("Mouse Position: ({:.1},{:.1})", mouse_pos.0, mouse_pos.1));
+        })
 }
 
 fn fitness<'a, P>(genome: &G,
                   expression: &Expression,
                   substrate_config: &SubstrateConfiguration<'a, P, Neuron>,
                   fitness_eval: &GraphSimilarity)
-                  -> Fitness
-    where P: Position
+-> Fitness
+where P: Position
 {
 
     let mut network_builder = NeuronNetworkBuilder::new();
@@ -121,8 +146,8 @@ fn main() {
     {
         for x in DistributeInterval::new(node_count.inputs, min, max) {
             substrate.add_node(Position2d::new(x, 0.75),
-                               Neuron::Input,
-                               NodeConnectivity::Out);
+            Neuron::Input,
+            NodeConnectivity::Out);
         }
     }
 
@@ -130,8 +155,8 @@ fn main() {
     {
         for x in DistributeInterval::new(node_count.hidden, min, max) {
             substrate.add_node(Position2d::new(x, 0.5),
-                               Neuron::Hidden,
-                               NodeConnectivity::InOut);
+            Neuron::Hidden,
+            NodeConnectivity::InOut);
         }
     }
 
@@ -139,23 +164,21 @@ fn main() {
     {
         for x in DistributeInterval::new(node_count.outputs, min, max) {
             substrate.add_node(Position2d::new(x, 0.25),
-                               Neuron::Output,
-                               NodeConnectivity::In);
+            Neuron::Output,
+            NodeConnectivity::In);
         }
     }
 
-    let driver_config = DriverConfig {
+    let mut evo_config = EvoConfig {
         mu: 100,
         lambda: 200,
         k: 2,
-        ngen: 10000,
         num_objectives: 3,
-        parallel_weight: INFINITY,
     };
 
     let selection = SelectNSGP { objective_eps: 0.01 };
 
-    let reproduction = Reproduction {
+    let mut reproduction = Reproduction {
         mating_method_weights: MatingMethodWeights {
             mutate_add_node: 5,
             mutate_drop_node: 0,
@@ -204,21 +227,21 @@ fn main() {
     // create `generation 0`
     let mut parents = {
         let mut initial = UnratedPopulation::new();
-        for _ in 0..driver_config.mu {
+        for _ in 0..evo_config.mu {
             initial.push(random_genome_creator.create::<_, Position2d>(&mut rng));
         }
         let mut rated = initial.rate_in_parallel(&|ind| {
-                                                     fitness(ind,
-                                                             &expression,
-                                                             &substrate_config,
-                                                             &domain_fitness_eval)
-                                                 },
-                                                 INFINITY);
+            fitness(ind,
+                    &expression,
+                    &substrate_config,
+                    &domain_fitness_eval)
+        },
+        INFINITY);
 
         PopulationFitness.apply(&mut rated);
 
-        rated.select(driver_config.mu,
-                     driver_config.num_objectives,
+        rated.select(evo_config.mu,
+                     evo_config.num_objectives,
                      &selection,
                      &mut rng)
     };
@@ -234,6 +257,16 @@ fn main() {
         running: false,
         iteration: 0,
         best_fitness: best_fitness,
+        mu: evo_config.mu as i32,
+        lambda: evo_config.lambda as i32,
+        k: evo_config.k as i32,
+
+        mutate_add_node: reproduction.mating_method_weights.mutate_add_node as i32,
+        mutate_drop_node: reproduction.mating_method_weights.mutate_drop_node as i32,
+        mutate_modify_node: reproduction.mating_method_weights.mutate_modify_node as i32,
+        mutate_connect: reproduction.mating_method_weights.mutate_connect as i32,
+        mutate_disconnect: reproduction.mating_method_weights.mutate_disconnect as i32,
+        mutate_weights: reproduction.mating_method_weights.mutate_weights as i32,
     };
 
     loop {
@@ -241,6 +274,17 @@ fn main() {
             support.render(CLEAR_COLOR, |ui| {
                 gui(ui, &mut state);
             });
+
+            evo_config.mu = state.mu as usize;
+            evo_config.lambda = state.lambda as usize;
+            evo_config.k = state.k as usize;
+            reproduction.mating_method_weights.mutate_add_node = state.mutate_add_node as u32;
+            reproduction.mating_method_weights.mutate_drop_node = state.mutate_drop_node as u32;
+            reproduction.mating_method_weights.mutate_modify_node = state.mutate_modify_node as u32;
+            reproduction.mating_method_weights.mutate_connect = state.mutate_connect as u32;
+            reproduction.mating_method_weights.mutate_disconnect = state.mutate_disconnect as u32;
+            reproduction.mating_method_weights.mutate_weights = state.mutate_weights as u32;
+
             let active = support.update_events();
             if !active {
                 break;
@@ -251,20 +295,20 @@ fn main() {
             // create next generation
             state.iteration += 1;
             let offspring = parents.reproduce(&mut rng,
-                                              driver_config.lambda,
-                                              driver_config.k,
+                                              evo_config.lambda,
+                                              evo_config.k,
                                               &|rng, p1, p2| reproduction.mate(rng, p1, p2));
             let rated_offspring = offspring.rate_in_parallel(&|ind| {
-                                                                 fitness(ind,
-                                                                         &expression,
-                                                                         &substrate_config,
-                                                                         &domain_fitness_eval)
-                                                             },
-                                                             INFINITY);
+                fitness(ind,
+                        &expression,
+                        &substrate_config,
+                        &domain_fitness_eval)
+            },
+            INFINITY);
             let mut next_gen = parents.merge(rated_offspring);
             PopulationFitness.apply(&mut next_gen);
-            parents = next_gen.select(driver_config.mu,
-                                      driver_config.num_objectives,
+            parents = next_gen.select(evo_config.mu,
+                                      evo_config.num_objectives,
                                       &selection,
                                       &mut rng);
 
@@ -272,7 +316,7 @@ fn main() {
                 (ind.fitness().domain_fitness * 1_000_000.0) as usize
             });
             state.best_fitness = best_individual.map(|ind| ind.fitness().domain_fitness)
-                                                .unwrap_or(0.0);
+                .unwrap_or(0.0);
         }
     }
 }
