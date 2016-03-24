@@ -106,6 +106,11 @@ pub enum WeightPerturbanceMethod {
     Random,
 }
 
+pub fn gaussian<R:Rng>(sigma: f64, rng: &mut R) -> f64 {
+    let normal = Normal::new(0.0, sigma);
+    normal.ind_sample(rng)
+}
+
 impl WeightPerturbanceMethod {
     pub fn perturb<R: Rng>(&self,
                            weight: Weight,
@@ -118,8 +123,7 @@ impl WeightPerturbanceMethod {
                 weight_range.clip_weight(Weight(weight.0 + range.random_weight(rng).0))
             }
             WeightPerturbanceMethod::JiggleGaussian { sigma } => {
-                let normal = Normal::new(0.0, sigma);
-                weight_range.clip_weight(Weight(weight.0 + normal.ind_sample(rng)))
+                weight_range.clip_weight(Weight(weight.0 + gaussian(sigma, rng)))
             }
         }
     }

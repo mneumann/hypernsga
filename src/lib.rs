@@ -1,3 +1,5 @@
+#![feature(associated_consts)]
+
 extern crate cppn as cppn_ext;
 extern crate acyclic_network;
 extern crate nsga2;
