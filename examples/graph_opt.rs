@@ -5,7 +5,7 @@ extern crate criterion_stats;
 
 use hypernsga::graph;
 use hypernsga::domain_graph::{Neuron, NeuronNetworkBuilder, GraphSimilarity};
-use hypernsga::cppn::{CppnDriver, GeometricActivationFunction, RandomGenomeCreator};
+use hypernsga::cppn::{CppnDriver, GeometricActivationFunction, RandomGenomeCreator, Reproduction};
 use hypernsga::mating::MatingMethodWeights;
 use hypernsga::prob::Prob;
 use hypernsga::weight::{WeightPerturbanceMethod, WeightRange};
@@ -72,23 +72,8 @@ fn main() {
     let selection = SelectNSGP {
         objective_eps: 0.01,
     };
-
-    let random_genome_creator = RandomGenomeCreator {
-        link_weight_range: WeightRange::bipolar(3.0),
-
-        start_activation_functions: vec![
-            //GeometricActivationFunction::Linear,
-            GeometricActivationFunction::BipolarGaussian,
-            GeometricActivationFunction::BipolarSigmoid,
-            GeometricActivationFunction::Sine,
-        ],
-        start_connected: false,
-        start_link_weight_range: WeightRange::bipolar(0.1),
-        start_symmetry: vec![], //Some(3.0), None, Some(3.0)],
-        start_initial_nodes: 0,
-    };
-
-    let driver: CppnDriver<_,_,_,Neuron,NeuronNetworkBuilder<Position2d>> = CppnDriver {
+    
+    let reproduction = Reproduction {
         mating_method_weights: MatingMethodWeights {
             mutate_add_node: 5,
             mutate_drop_node: 0,
@@ -113,13 +98,31 @@ fn main() {
         mutate_drop_node_tournament_k: 10,
         mutate_modify_node_tournament_k: 2,
         mate_retries: 100,
+    };
 
+    let random_genome_creator = RandomGenomeCreator {
+        link_weight_range: WeightRange::bipolar(3.0),
+
+        start_activation_functions: vec![
+            //GeometricActivationFunction::Linear,
+            GeometricActivationFunction::BipolarGaussian,
+            GeometricActivationFunction::BipolarSigmoid,
+            GeometricActivationFunction::Sine,
+        ],
+        start_connected: false,
+        start_link_weight_range: WeightRange::bipolar(0.1),
+        start_symmetry: vec![], //Some(3.0), None, Some(3.0)],
+        start_initial_nodes: 0,
+    };
+
+    let driver: CppnDriver<_,_,_,Neuron,NeuronNetworkBuilder<Position2d>> = CppnDriver {
         link_expression_threshold: 0.01,
 
         substrate_configuration: substrate.to_configuration(),
         domain_fitness: &target_opt,
         _netbuilder: PhantomData,
 
+        reproduction: reproduction,
         random_genome_creator: random_genome_creator,
     };
 

@@ -108,18 +108,6 @@ pub struct CppnDriver<'a, DOMFIT, G, P, T, NETBUILDER>
           NETBUILDER: NetworkBuilder<POS = P, NT = T, Output = G> + Sync,
           G: Sync
 {
-    pub mating_method_weights: MatingMethodWeights,
-    pub activation_functions: Vec<GeometricActivationFunction>,
-    pub mutate_element_prob: Prob,
-    pub weight_perturbance: WeightPerturbanceMethod,
-    pub link_weight_range: WeightRange,
-    pub link_weight_creation_sigma: f64,
-
-    pub mutate_add_node_random_link_weight: bool,
-    pub mutate_drop_node_tournament_k: usize,
-    pub mutate_modify_node_tournament_k: usize,
-
-    pub mate_retries: usize,
 
     pub link_expression_threshold: f64,
 
@@ -127,22 +115,8 @@ pub struct CppnDriver<'a, DOMFIT, G, P, T, NETBUILDER>
     pub domain_fitness: &'a DOMFIT,
     pub _netbuilder: PhantomData<NETBUILDER>,
 
+    pub reproduction: Reproduction,
     pub random_genome_creator: RandomGenomeCreator,
-}
-
-impl<'a, DOMFIT, G, P, T, NETBUILDER> CppnDriver<'a, DOMFIT, G, P, T, NETBUILDER>
-    where DOMFIT: DomainFitness<G>,
-          P: Position + Sync + 'a,
-          T: Sync + 'a,
-          NETBUILDER: NetworkBuilder<POS = P, NT = T, Output = G> + Sync,
-          G: Sync
-{
-    fn random_hidden_node<R>(&self, rng: &mut R) -> CppnNode<GeometricActivationFunction>
-        where R: Rng
-    {
-        let af = *rng.choose(&self.activation_functions).unwrap();
-        CppnNode::hidden(af)
-    }
 }
 
 impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T, NETBUILDER>
@@ -190,57 +164,7 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
     fn mate<R>(&self, rng: &mut R, parent1: &Self::GENOME, parent2: &Self::GENOME) -> Self::GENOME
         where R: Rng
     {
-        let mut offspring = parent1.clone();
-
-        for _ in 0..self.mate_retries + 1 {
-            let modified = match MatingMethod::random_with(&self.mating_method_weights, rng) {
-                MatingMethod::MutateAddNode => {
-                    let link_weight = if self.mutate_add_node_random_link_weight {
-                        Some(self.link_weight_range.random_weight(rng))
-                    } else {
-                        // duplicate existing node weight
-                        None
-                    };
-                    let hidden_node = self.random_hidden_node(rng);
-                    offspring.mutate_add_node(hidden_node, link_weight, rng)
-                }
-                MatingMethod::MutateDropNode => {
-                    offspring.mutate_drop_node(self.mutate_drop_node_tournament_k, rng)
-                }
-                MatingMethod::MutateModifyNode => {
-                    let hidden_node = self.random_hidden_node(rng);
-                    offspring.mutate_modify_node(hidden_node,
-                                                 self.mutate_modify_node_tournament_k,
-                                                 rng)
-                }
-                MatingMethod::MutateConnect => {
-                    let link_weight =
-                        self.link_weight_range
-                            .clip_weight(Weight(gaussian(self.link_weight_creation_sigma, rng)));
-                    offspring.mutate_connect(link_weight, rng)
-                }
-                MatingMethod::MutateDisconnect => offspring.mutate_disconnect(rng),
-                MatingMethod::MutateWeights => {
-                    let modifications = offspring.mutate_weights(self.mutate_element_prob,
-                                                                 &self.weight_perturbance,
-                                                                 &self.link_weight_range,
-                                                                 rng);
-                    modifications != 0
-                }
-                MatingMethod::CrossoverWeights => {
-                    let modifications = offspring.crossover_weights(parent2, rng);
-                    modifications != 0
-                }
-            };
-
-            if modified {
-                break;
-            }
-        }
-
-        warn!("mate(): Genome was NOT modified!");
-
-        return offspring;
+        self.reproduction.mate(rng, parent1, parent2)
     }
 
     fn population_metric(&self, population: &mut RatedPopulation<Self::GENOME, Self::FIT>) {
@@ -298,12 +222,14 @@ pub struct RandomGenomeCreator {
     pub link_weight_range: WeightRange,
 }
 
+pub type G = CppnGenome<GeometricActivationFunction>;
+
 impl RandomGenomeCreator {
-    pub fn create<R, P>(&self, rng: &mut R) -> CppnGenome<GeometricActivationFunction>
+    pub fn create<R, P>(&self, rng: &mut R) -> G
         where R: Rng,
               P: Position
     {
-        let mut genome = CppnGenome::<GeometricActivationFunction>::new();
+        let mut genome = G::new();
 
         let mut inputs = Vec::new();
         let mut outputs = Vec::new();
@@ -386,3 +312,82 @@ impl RandomGenomeCreator {
         genome
     }
 }
+
+pub struct Reproduction {
+    pub mate_retries: usize,
+    pub mating_method_weights: MatingMethodWeights,
+    pub mutate_element_prob: Prob,
+    pub link_weight_range: WeightRange,
+    pub mutate_add_node_random_link_weight: bool,
+    pub mutate_drop_node_tournament_k: usize,
+    pub mutate_modify_node_tournament_k: usize,
+    pub link_weight_creation_sigma: f64,
+    pub activation_functions: Vec<GeometricActivationFunction>,
+    pub weight_perturbance: WeightPerturbanceMethod,
+}
+
+impl Reproduction {
+    fn random_hidden_node<R>(&self, rng: &mut R) -> CppnNode<GeometricActivationFunction>
+        where R: Rng
+    {
+        let af = *rng.choose(&self.activation_functions).unwrap();
+        CppnNode::hidden(af)
+    }
+
+    fn mate<R>(&self, rng: &mut R, parent1: &G, parent2: &G) -> G
+        where R: Rng
+    {
+        let mut offspring = parent1.clone();
+
+        for _ in 0..self.mate_retries + 1 {
+            let modified = match MatingMethod::random_with(&self.mating_method_weights, rng) {
+                MatingMethod::MutateAddNode => {
+                    let link_weight = if self.mutate_add_node_random_link_weight {
+                        Some(self.link_weight_range.random_weight(rng))
+                    } else {
+                        // duplicate existing node weight
+                        None
+                    };
+                    let hidden_node = self.random_hidden_node(rng);
+                    offspring.mutate_add_node(hidden_node, link_weight, rng)
+                }
+                MatingMethod::MutateDropNode => {
+                    offspring.mutate_drop_node(self.mutate_drop_node_tournament_k, rng)
+                }
+                MatingMethod::MutateModifyNode => {
+                    let hidden_node = self.random_hidden_node(rng);
+                    offspring.mutate_modify_node(hidden_node,
+                                                 self.mutate_modify_node_tournament_k,
+                                                 rng)
+                }
+                MatingMethod::MutateConnect => {
+                    let link_weight =
+                        self.link_weight_range
+                            .clip_weight(Weight(gaussian(self.link_weight_creation_sigma, rng)));
+                    offspring.mutate_connect(link_weight, rng)
+                }
+                MatingMethod::MutateDisconnect => offspring.mutate_disconnect(rng),
+                MatingMethod::MutateWeights => {
+                    let modifications = offspring.mutate_weights(self.mutate_element_prob,
+                                                                 &self.weight_perturbance,
+                                                                 &self.link_weight_range,
+                                                                 rng);
+                    modifications != 0
+                }
+                MatingMethod::CrossoverWeights => {
+                    let modifications = offspring.crossover_weights(parent2, rng);
+                    modifications != 0
+                }
+            };
+
+            if modified {
+                break;
+            }
+        }
+
+        warn!("mate(): Genome was NOT modified!");
+
+        return offspring;
+    }
+}
+
