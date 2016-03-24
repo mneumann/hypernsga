@@ -32,3 +32,5 @@ criterion-stats = "0.1.0"
 #pcg = { git = "https://github.com/codahale/pcg.git" }
 #imgui = { git = "https://github.com/gekkio/imgui-rs" }
 imgui = { path = "../imgui-rs" }
+glium = "0.13"
+time = "0.1"
