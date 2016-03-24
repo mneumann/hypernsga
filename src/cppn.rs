@@ -43,7 +43,14 @@ fn develop_cppn<'a, P, AF, T, V>(cppn: &mut Cppn<CppnNode<AF>, Weight, ()>,
     let links = substrate_config.links();
     let null_position = substrate_config.null_position();
 
-    let mut bitvec = BehavioralBitvec::new(cppn.output_count() * (nodes.len() + links.len()));
+    let mut behavior = Behavior {
+        bv_link_weight1:    BehavioralBitvec::new(links.len()),
+        bv_link_weight2:    BehavioralBitvec::new(links.len()),
+        bv_link_expression: BehavioralBitvec::new(links.len()),
+        bv_node_weight:     BehavioralBitvec::new(nodes.len()),
+    };
+    //let mut bitvec = BehavioralBitvec::new(cppn.output_count() * (nodes.len() + links.len()));
+
     let mut connection_cost = 0.0;
 
     // First visit all nodes
@@ -52,17 +59,16 @@ fn develop_cppn<'a, P, AF, T, V>(cppn: &mut Cppn<CppnNode<AF>, Weight, ()>,
         let inputs = [node.position.coords(), null_position.coords()];
         cppn.process(&inputs[..]);
 
-        let link_weight1 = cppn.read_output(CPPN_OUTPUT_LINK_WEIGHT1).unwrap();
-        let link_expression = cppn.read_output(CPPN_OUTPUT_LINK_EXPRESSION).unwrap();
+        //let link_weight1 = cppn.read_output(CPPN_OUTPUT_LINK_WEIGHT1).unwrap();
+        //let link_expression = cppn.read_output(CPPN_OUTPUT_LINK_EXPRESSION).unwrap();
 
-        // link_weight2 and node_weight are optional. in case they don't exist, set them to 0.0
-        let link_weight2 = cppn.read_output(CPPN_OUTPUT_LINK_WEIGHT2).unwrap_or(0.0);
-        let node_weight = cppn.read_output(CPPN_OUTPUT_NODE_WEIGHT).unwrap_or(0.0);
+        // link_weight2 and node_weight are optional. in case they don't exist, set them to -1.0
+        // (-1.0 results in the behavioral bitvector set to all 0)
+        //let link_weight2 = cppn.read_output(CPPN_OUTPUT_LINK_WEIGHT2).unwrap_or(-1.0);
 
-        bitvec.push(link_weight1);
-        bitvec.push(link_expression);
-        bitvec.push(link_weight2);
-        bitvec.push(node_weight);
+        let node_weight = cppn.read_output(CPPN_OUTPUT_NODE_WEIGHT).unwrap_or(-1.0);
+
+        behavior.bv_node_weight.push(node_weight);
 
         visitor.add_node(node, node_weight)
     }
@@ -74,14 +80,14 @@ fn develop_cppn<'a, P, AF, T, V>(cppn: &mut Cppn<CppnNode<AF>, Weight, ()>,
         let link_weight1 = cppn.read_output(CPPN_OUTPUT_LINK_WEIGHT1).unwrap();
         let link_expression = cppn.read_output(CPPN_OUTPUT_LINK_EXPRESSION).unwrap();
 
-        // link_weight2 and node_weight are optional. in case they don't exist, set them to 0.0
-        let link_weight2 = cppn.read_output(CPPN_OUTPUT_LINK_WEIGHT2).unwrap_or(0.0);
-        let node_weight = cppn.read_output(CPPN_OUTPUT_NODE_WEIGHT).unwrap_or(0.0);
+        // link_weight2 and node_weight are optional. in case they don't exist, set them to -1.0
+        // (-1.0 results in the behavioral bitvector set to all 0)
+        let link_weight2 = cppn.read_output(CPPN_OUTPUT_LINK_WEIGHT2).unwrap_or(-1.0);
+        //let node_weight = cppn.read_output(CPPN_OUTPUT_NODE_WEIGHT).unwrap_or(-1.0);
 
-        bitvec.push(link_weight1);
-        bitvec.push(link_expression);
-        bitvec.push(link_weight2);
-        bitvec.push(node_weight);
+        behavior.bv_link_weight1.push(link_weight1);
+        behavior.bv_link_expression.push(link_expression);
+        behavior.bv_link_weight2.push(link_weight2);
 
         if link_expression > leo_threshold {
             let distance_sq = source_node.position.distance_square(&target_node.position);
@@ -91,7 +97,7 @@ fn develop_cppn<'a, P, AF, T, V>(cppn: &mut Cppn<CppnNode<AF>, Weight, ()>,
         }
     }
 
-    return (Behavior{bitvec: bitvec}, connection_cost);
+    return (behavior, connection_cost);
 }
 
 /// Determines the domain fitness of `G`

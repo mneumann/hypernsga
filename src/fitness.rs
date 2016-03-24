@@ -5,12 +5,17 @@ use behavioral_bitvec::BehavioralBitvec;
 
 #[derive(Clone, Debug)]
 pub struct Behavior {
-    pub bitvec: BehavioralBitvec,
+    pub bv_link_weight1: BehavioralBitvec,
+    pub bv_link_weight2: BehavioralBitvec,
+    pub bv_link_expression: BehavioralBitvec,
+    pub bv_node_weight: BehavioralBitvec,
 }
 
 impl Behavior {
     pub fn weighted_distance(&self, other: &Self) -> f64 {
-        self.bitvec.hamming_distance(&other.bitvec) as f64
+        let d1 = self.bv_link_weight1.hamming_distance(&other.bv_link_weight1) as f64;
+        let d2 = self.bv_link_expression.hamming_distance(&other.bv_link_expression) as f64;
+        d1 + d2
     }
 }
 
