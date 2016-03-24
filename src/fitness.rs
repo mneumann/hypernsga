@@ -1,8 +1,6 @@
 use nsga2::multi_objective::MultiObjective;
 use nsga2::domination::Domination;
-use prob::Prob;
 use std::cmp::Ordering;
-use rand::Rng;
 use behavioral_bitvec::BehavioralBitvec;
 
 /// We use a fitness composed of three objectives. Smaller values are "better".
@@ -22,12 +20,11 @@ pub struct Fitness {
 
     // This is used to determine the behavioral_diversity.
     pub behavioral_bitvec: BehavioralBitvec,
+
 }
 
 impl MultiObjective for Fitness {
-    fn num_objectives(&self) -> usize {
-        3
-    }
+    const NUM_OBJECTIVES: usize = 3;
 
     fn cmp_objective(&self, other: &Self, objective: usize) -> Ordering {
         match objective {
@@ -57,61 +54,44 @@ impl MultiObjective for Fitness {
     }
 }
 
-/// We use probabilistic domination where each objective can have a
-/// probability assigned with which it is taken into account.
+impl Domination for Fitness {
+    fn domination_ord(&self, rhs: &Fitness) -> Ordering {
+        let lhs = self;
 
-pub struct FitnessDomination<'a, R>
-    where R: Rng + 'a
-{
-    pub p_domain_fitness: Prob,
-    pub p_behavioral_diversity: Prob,
-    pub p_connection_cost: Prob,
-    pub rng: &'a mut R,
-}
-
-impl<'a, R> Domination<Fitness> for FitnessDomination<'a, R> where R: Rng + 'a
-{
-    fn domination_ord(&mut self, lhs: &Fitness, rhs: &Fitness) -> Ordering {
         let mut left_dom_cnt = 0;
         let mut right_dom_cnt = 0;
 
-        if self.p_domain_fitness.flip(self.rng) {
-            match lhs.domain_fitness.partial_cmp(&rhs.domain_fitness).unwrap() {
-                Ordering::Greater => {
-                    // higher values are better
-                    left_dom_cnt += 1;
-                }
-                Ordering::Less => {
-                    right_dom_cnt += 1;
-                }
-                Ordering::Equal => {}
+        match lhs.domain_fitness.partial_cmp(&rhs.domain_fitness).unwrap() {
+            Ordering::Greater => {
+                // higher values are better
+                left_dom_cnt += 1;
             }
+            Ordering::Less => {
+                right_dom_cnt += 1;
+            }
+            Ordering::Equal => {}
         }
 
-        if self.p_behavioral_diversity.flip(self.rng) {
-            match lhs.behavioral_diversity.cmp(&rhs.behavioral_diversity) {
-                Ordering::Greater => {
-                    // higher values are better
-                    left_dom_cnt += 1;
-                }
-                Ordering::Less => {
-                    right_dom_cnt += 1;
-                }
-                Ordering::Equal => {}
+        match lhs.behavioral_diversity.cmp(&rhs.behavioral_diversity) {
+            Ordering::Greater => {
+                // higher values are better
+                left_dom_cnt += 1;
             }
+            Ordering::Less => {
+                right_dom_cnt += 1;
+            }
+            Ordering::Equal => {}
         }
 
-        if self.p_connection_cost.flip(self.rng) {
-            match lhs.connection_cost.partial_cmp(&rhs.connection_cost).unwrap() {
-                Ordering::Less => {
-                    // smaller values are better
-                    left_dom_cnt += 1;
-                }
-                Ordering::Greater => {
-                    right_dom_cnt += 1;
-                }
-                Ordering::Equal => {}
+        match lhs.connection_cost.partial_cmp(&rhs.connection_cost).unwrap() {
+            Ordering::Less => {
+                // smaller values are better
+                left_dom_cnt += 1;
             }
+            Ordering::Greater => {
+                right_dom_cnt += 1;
+            }
+            Ordering::Equal => {}
         }
 
         if left_dom_cnt > 0 && right_dom_cnt == 0 {
