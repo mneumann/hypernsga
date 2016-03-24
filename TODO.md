@@ -2,6 +2,9 @@
 - [x] Start with x-axis seed nodes.
 - [ ] Choose a higher mutation rate for individuals which have a worse fitness than
       the avergage.
+- [ ] Adapt the mutation rate according to the average behavioral distance
+- [ ] Weight mutation: Change until the behavioral distance to the original individual changes by 
+      some percentage.  
 - [ ] Implement a Conrod GUI for experimenting with setting configuration options
       during the simulation run. 
 - [ ] Embed a RNG into every Genome.

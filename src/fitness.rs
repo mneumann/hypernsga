@@ -12,7 +12,7 @@ pub struct Fitness {
     /// The behavioral diversity of the CPPN (higher value is better!)
     ///
     /// This value is not normalized towards the number of individuals in the population,
-    /// and as such just the sum of all hamming distances.
+    /// and as such is just the sum of all hamming distances.
     pub behavioral_diversity: u64,
 
     /// The connection cost of the generated network (smaller value is better!)
@@ -20,7 +20,6 @@ pub struct Fitness {
 
     // This is used to determine the behavioral_diversity.
     pub behavioral_bitvec: BehavioralBitvec,
-
 }
 
 impl MultiObjective for Fitness {
@@ -42,11 +41,14 @@ impl MultiObjective for Fitness {
         match objective {
             0 => self.domain_fitness - other.domain_fitness,
             1 => {
+                self.behavioral_diversity as f64 - other.behavioral_diversity as f64
+                /*
                 if self.behavioral_diversity > other.behavioral_diversity {
                     (self.behavioral_diversity - other.behavioral_diversity) as f64
                 } else {
                     (other.behavioral_diversity - self.behavioral_diversity) as f64
                 }
+                */
             }
             2 => self.connection_cost - other.connection_cost,
             _ => panic!(),
