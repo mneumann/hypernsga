@@ -34,10 +34,21 @@ use imgui::*;
 use self::support::Support;
 use imgui_sys::igPlotLines2;
 use libc::*;
+use glium::Surface;
+use glium::index::PrimitiveType;
+use glium::backend::Facade;
 
 mod support;
 
 const CLEAR_COLOR: (f32, f32, f32, f32) = (1.0, 1.0, 1.0, 1.0);
+
+#[derive(Copy, Clone)]
+struct Vertex {
+    position: [f32; 2],
+    color: [f32; 3],
+}
+
+implement_vertex!(Vertex, position, color);
 
 #[derive(Debug)]
 struct State {
@@ -301,11 +312,74 @@ fn main() {
         best_fitness_history: vec![(0, best_fitness)],
     };
 
+
     loop {
         {
-            support.render(CLEAR_COLOR, |ui| {
-                gui(ui, &mut state);
-            });
+            support.render(CLEAR_COLOR, |display, imgui, renderer, target, delta_f| {
+                let (width, height) = target.get_dimensions();
+                let ui = imgui.frame(width, height, delta_f);
+                gui(&ui, &mut state);
+                renderer.render(target, ui).unwrap();
+
+
+        let vertex_buffer = {
+            glium::VertexBuffer::new(display,
+                &[
+                Vertex { position: [-0.5, -0.5], color: [0.0, 1.0, 0.0] },
+                Vertex { position: [ 0.0,  0.5], color: [0.0, 0.0, 1.0] },
+                Vertex { position: [ -0.5, -0.51], color: [1.0, 0.0, 0.0] },
+                ]
+            ).unwrap()
+        };
+
+
+        let index_buffer = glium::IndexBuffer::new(display, PrimitiveType::TrianglesList,
+                                               &[0u16, 1, 2]).unwrap();
+
+        let program = program!(display,
+         140 => {
+            vertex: "
+                #version 140
+                uniform mat4 matrix;
+                in vec2 position;
+                in vec3 color;
+                out vec3 vColor;
+                void main() {
+                    gl_Position = vec4(position, 0.0, 1.0) * matrix;
+                    vColor = color;
+                }
+            ",
+
+            fragment: "
+                #version 140
+                in vec3 vColor;
+                out vec4 f_color;
+                void main() {
+                    //f_color = vec4(vColor, 1.0);
+                    f_color = vec4(1.0, 0.0, 0.0, 1.0);
+                }
+            "
+        },
+      ).unwrap();
+
+        let uniforms = uniform! {
+            matrix: [
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0f32]
+            ]
+        };
+
+        let draw_parameters = glium::draw_parameters::DrawParameters {
+            line_width: Some(1.0),
+            point_size: Some(1.0),
+            .. Default::default()
+        };
+        target.draw(&vertex_buffer, &index_buffer, &program, &uniforms, &draw_parameters).unwrap();
+
+            }
+            );
 
             evo_config.mu = state.mu as usize;
             evo_config.lambda = state.lambda as usize;
