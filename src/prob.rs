@@ -9,6 +9,10 @@ impl Prob {
         Prob(p)
     }
 
+    pub fn get(&self) -> f32 {
+        self.0
+    }
+
     pub fn flip<R: Rng>(&self, rng: &mut R) -> bool {
         if self.0 < 1.0 {
             let v: f32 = rng.gen(); // half open [0, 1)

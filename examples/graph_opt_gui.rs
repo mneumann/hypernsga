@@ -113,8 +113,19 @@ struct State {
     mutate_disconnect: i32,
     mutate_weights: i32,
 
-    best_fitness_history: Vec<(usize, f64)>
-        //crossover_weights: 0,
+    mutate_element_prob: f32,
+    nsgp_objective_eps: f32,
+    weight_perturbance_sigma: f32,
+    link_weight_range: f32,
+    link_weight_creation_sigma: f32,
+
+    best_fitness_history: Vec<(usize, f64)>,
+    //crossover_weights: 0,
+
+
+    nm_edge_score: bool,
+    nm_iters: i32,
+    nm_eps: f32,
 }
 
 struct EvoConfig {
@@ -167,9 +178,27 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State) {
             if ui.collapsing_header(im_str!("Population Settings")).build() {
                 ui.slider_i32(im_str!("Population Size"), &mut state.mu, state.k, 1000).build();
                 ui.slider_i32(im_str!("Offspring Size"), &mut state.lambda, 1, 1000).build();
-                ui.slider_i32(im_str!("Tournament Size"), &mut state.k, 1, state.mu).build();
             }
-            if ui.collapsing_header(im_str!("Mutate Probability")).build() {
+
+            if ui.collapsing_header(im_str!("Selection")).build() {
+                ui.slider_i32(im_str!("Tournament Size"), &mut state.k, 1, state.mu).build();
+                ui.slider_f32(im_str!("NSGP Objective Epsilon"), &mut state.nsgp_objective_eps, 0.0, 1.0).build();
+            }
+
+            if ui.collapsing_header(im_str!("CPPN")).build() {
+                ui.slider_f32(im_str!("Link Weight Range (bipolar)"), &mut state.link_weight_range, 0.1, 5.0).build();
+                ui.slider_f32(im_str!("Link Weight Creation Sigma"), &mut state.link_weight_creation_sigma, 0.01, 1.0).build();
+                ui.slider_f32(im_str!("Weight Perturbance Sigma"), &mut state.weight_perturbance_sigma, 0.0, 1.0).build();
+            }
+
+            if ui.collapsing_header(im_str!("Neighbor Matching")).build() {
+                ui.checkbox(im_str!("Edge Weight Scoring"), &mut state.nm_edge_score);
+                ui.slider_i32(im_str!("Iterations"), &mut state.nm_iters, 1, 1000).build();
+                ui.slider_f32(im_str!("Eps"), &mut state.nm_eps, 0.0, 1.0).build();
+            }
+
+            if ui.collapsing_header(im_str!("Mutation")).build() {
+                ui.slider_f32(im_str!("Mutation Rate"), &mut state.mutate_element_prob, 0.0, 1.0).build();
                 ui.slider_i32(im_str!("Weights"), &mut state.mutate_weights, 1, 1000).build();
                 ui.slider_i32(im_str!("Add Node"), &mut state.mutate_add_node, 0, 1000).build();
                 ui.slider_i32(im_str!("Drop Node"), &mut state.mutate_drop_node, 0, 1000).build();
@@ -217,7 +246,7 @@ fn main() {
     let graph_file = env::args().nth(1).unwrap();
     println!("graph: {}", graph_file);
 
-    let domain_fitness_eval = GraphSimilarity {
+    let mut domain_fitness_eval = GraphSimilarity {
         target_graph: graph::load_graph_normalized(&graph_file),
         edge_score: true,
         iters: 50,
@@ -267,37 +296,39 @@ fn main() {
         num_objectives: 3,
     };
 
-    let selection = SelectNSGP { objective_eps: 0.01 };
+    let mut selection = SelectNSGP { objective_eps: 0.1 };
 
+    let weight_perturbance_sigma = 0.1;
+    let link_weight_range = 1.0;
     let mut reproduction = Reproduction {
         mating_method_weights: MatingMethodWeights {
-            mutate_add_node: 5,
-            mutate_drop_node: 0,
-            mutate_modify_node: 0,
+            mutate_add_node: 1,
+            mutate_drop_node: 1,
+            mutate_modify_node: 1,
             mutate_connect: 20,
-            mutate_disconnect: 5,
+            mutate_disconnect: 20,
             mutate_weights: 100,
             crossover_weights: 0,
         },
         activation_functions: vec![
-            //GeometricActivationFunction::Linear,
+            GeometricActivationFunction::Linear,
             GeometricActivationFunction::BipolarGaussian,
             GeometricActivationFunction::BipolarSigmoid,
             GeometricActivationFunction::Sine,
         ],
         mutate_element_prob: Prob::new(0.05),
-        weight_perturbance: WeightPerturbanceMethod::JiggleGaussian { sigma: 0.1 },
-        link_weight_range: WeightRange::bipolar(3.0),
+        weight_perturbance: WeightPerturbanceMethod::JiggleGaussian { sigma: weight_perturbance_sigma },
+        link_weight_range: WeightRange::bipolar(link_weight_range),
         link_weight_creation_sigma: 0.1,
 
-        mutate_add_node_random_link_weight: false,
+        mutate_add_node_random_link_weight: true,
         mutate_drop_node_tournament_k: 10,
         mutate_modify_node_tournament_k: 2,
         mate_retries: 100,
     };
 
     let random_genome_creator = RandomGenomeCreator {
-        link_weight_range: WeightRange::bipolar(3.0),
+        link_weight_range: WeightRange::bipolar(link_weight_range),
 
         start_activation_functions: vec![
             //GeometricActivationFunction::Linear,
@@ -311,7 +342,7 @@ fn main() {
         start_initial_nodes: 0,
     };
 
-    let expression = Expression { link_expression_threshold: 0.01 };
+    let expression = Expression { link_expression_threshold: 0.1 };
 
     let substrate_config = substrate.to_configuration();
 
@@ -349,7 +380,7 @@ fn main() {
     }
 
     let mut state = State {
-        running: false,
+        running: true,
         iteration: 0,
         best_fitness: best_fitness,
         mu: evo_config.mu as i32,
@@ -364,6 +395,16 @@ fn main() {
         mutate_weights: reproduction.mating_method_weights.mutate_weights as i32,
 
         best_fitness_history: vec![(0, best_fitness)],
+
+        nm_edge_score: domain_fitness_eval.edge_score,
+        nm_iters: domain_fitness_eval.iters as i32,
+        nm_eps: domain_fitness_eval.eps,
+
+        mutate_element_prob: reproduction.mutate_element_prob.get(),
+        nsgp_objective_eps: selection.objective_eps as f32,
+        weight_perturbance_sigma: weight_perturbance_sigma as f32,
+        link_weight_range: link_weight_range as f32,
+        link_weight_creation_sigma: reproduction.link_weight_creation_sigma as f32,
     };
 
     let mut program: Option<glium::Program> = None;
@@ -510,6 +551,17 @@ fn main() {
             reproduction.mating_method_weights.mutate_connect = state.mutate_connect as u32;
             reproduction.mating_method_weights.mutate_disconnect = state.mutate_disconnect as u32;
             reproduction.mating_method_weights.mutate_weights = state.mutate_weights as u32;
+            domain_fitness_eval.edge_score = state.nm_edge_score;
+            domain_fitness_eval.iters = state.nm_iters as usize;
+            domain_fitness_eval.eps = state.nm_eps;
+
+
+            reproduction.mutate_element_prob = Prob::new(state.mutate_element_prob);
+            selection.objective_eps = state.nsgp_objective_eps as f64;
+            reproduction.weight_perturbance = WeightPerturbanceMethod::JiggleGaussian { 
+                sigma: state.weight_perturbance_sigma as f64};
+            reproduction.link_weight_range = WeightRange::bipolar(state.link_weight_range as f64);
+            reproduction.link_weight_creation_sigma = state.link_weight_creation_sigma as f64;
 
             let active = support.update_events();
             if !active {
