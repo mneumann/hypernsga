@@ -10,6 +10,7 @@ dependencies = [
  "criterion-stats 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "glium 0.13.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "graph-io-gml 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "graph-layout 0.0.1 (git+https://github.com/mneumann/graph-layout-rs)",
  "graph-neighbor-matching 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "hamming 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "imgui 0.0.7-pre",
@@ -169,7 +170,7 @@ dependencies = [
 [[package]]
 name = "cppn"
 version = "0.0.1"
-source = "git+https://github.com/mneumann/cppn-rs#47c97ff4398ee4e6a080ae3cab4afcc361b7edfd"
+source = "git+https://github.com/mneumann/cppn-rs#53fa88cedbe58a2b9fe05e560849df1e9fa7912a"
 dependencies = [
  "acyclic-network 0.0.1 (git+https://github.com/mneumann/acyclic-network-rs)",
  "fixedbitset 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -488,6 +489,11 @@ dependencies = [
  "asexp 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "petgraph 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "graph-layout"
+version = "0.0.1"
+source = "git+https://github.com/mneumann/graph-layout-rs#8261dcfb673f5812653f7f884f34c94b561f5d2d"
 
 [[package]]
 name = "graph-neighbor-matching"

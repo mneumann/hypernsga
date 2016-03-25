@@ -38,3 +38,4 @@ time = "0.1"
 conrod = "0.32.0"
 piston_window = "0.38.0"
 libc = "0.2"
+graph-layout = { git = "https://github.com/mneumann/graph-layout-rs" }

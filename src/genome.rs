@@ -27,6 +27,11 @@ impl<NT: NodeType> Genome<NT> {
         self.protected_nodes = self.network.node_count();
     }
 
+    pub fn protected_nodes(&self) -> usize {
+        self.protected_nodes
+    }
+
+
     /// Returns a reference to the feed forward network.
 
     pub fn network(&self) -> &Network<NT, Weight, ()> {

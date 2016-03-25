@@ -10,11 +10,12 @@ extern crate imgui;
 extern crate time;
 extern crate imgui_sys;
 extern crate libc;
+extern crate graph_layout;
 
 use hypernsga::graph;
 use hypernsga::domain_graph::{Neuron, NeuronNetworkBuilder, GraphSimilarity};
 use hypernsga::network_builder::NetworkBuilder;
-use hypernsga::cppn::{GeometricActivationFunction, RandomGenomeCreator, Reproduction,
+use hypernsga::cppn::{Cppn, GeometricActivationFunction, RandomGenomeCreator, Reproduction,
 Expression, G, PopulationFitness};
 use hypernsga::fitness::{Fitness, DomainFitness};
 use hypernsga::mating::MatingMethodWeights;
@@ -29,6 +30,7 @@ use std::f64::INFINITY;
 use criterion_stats::univariate::Sample;
 use std::env;
 use std::mem;
+use rand::Rng;
 
 use imgui::*;
 use self::support::Support;
@@ -36,7 +38,6 @@ use imgui_sys::igPlotLines2;
 use libc::*;
 use glium::Surface;
 use glium::index::PrimitiveType;
-use glium::backend::Facade;
 
 mod support;
 
@@ -366,6 +367,7 @@ fn main() {
     };
 
     let mut program: Option<glium::Program> = None;
+    let mut program_vertex: Option<glium::Program> = None;
 
     loop {
         {
@@ -382,7 +384,6 @@ fn main() {
                 &mut network_builder,
                 &substrate_config);
 
-
                 let vertex_buffer = {
                     glium::VertexBuffer::new(display, &network_builder.point_list).unwrap()
                 };
@@ -391,6 +392,51 @@ fn main() {
                 let line_index_buffer  = glium::IndexBuffer::new(display, PrimitiveType::LinesList,
                                                                  &network_builder.link_index_list).unwrap();
 
+
+                // Layout the CPPN
+                let cppn = Cppn::new(best_ind.genome().network());
+                let layers = cppn.group_layers();
+                let mut dy = DistributeInterval::new(layers.len(), -1.0, 1.0);
+
+                let mut node_positions: Vec<_> = best_ind.genome().network().nodes().iter().map(|node| {
+                    graph_layout::P2d(0.0, 0.0)
+                }).collect();
+
+                for layer in layers {
+                    let y = dy.next().unwrap();
+                    let mut dx = DistributeInterval::new(layer.len(), -1.0, 1.0);
+                    for nodeidx in layer {
+                        let x = dx.next().unwrap();
+                        node_positions[nodeidx] = graph_layout::P2d(x as f32, y as f32);
+                    }
+                }
+
+                /*
+                let mut node_positions: Vec<_> = best_ind.genome().network().nodes().iter().map(|node| {
+                    let x: f32 = rng.gen();
+                    let y: f32 = rng.gen();
+                    graph_layout::P2d(x, y)
+                }).collect();
+                let mut node_neighbors: Vec<Vec<usize>> = node_positions.iter().map(|_| Vec::new()).collect();
+
+                best_ind.genome().network().each_link_ref(|link_ref| {
+                    let src = link_ref.link().source_node_index().index();
+                    let dst = link_ref.link().target_node_index().index();
+                    node_neighbors[src].push(dst);
+                    node_neighbors[dst].push(src);
+                });
+
+                graph_layout::fruchterman_reingold::layout_typical_2d(Some(0.001), &mut node_positions, &node_neighbors, best_ind.genome().protected_nodes());
+
+                */
+                let cppn_vertices: Vec<_> = node_positions.iter().map(|p2d| Vertex{position: [p2d.0, p2d.1], color: [0.0, 1.0, 0.0]}
+                ).collect();
+
+
+
+                let vertex_buffer_cppn = {
+                    glium::VertexBuffer::new(display, &cppn_vertices).unwrap()
+                };
 
                 if program.is_none() {
                     program = Some(program!(display,
@@ -415,6 +461,32 @@ fn main() {
                                             ).unwrap());
                 }
 
+                if program_vertex.is_none() {
+                    program_vertex = Some(program!(display,
+                                            140 => {
+                                                vertex: "
+                    #version 140
+                    uniform mat4 matrix;
+                    in vec2 position;
+                    in vec3 color;
+                    out vec3 fl_color;
+                    void main() {
+                        gl_Position = matrix * vec4(position, 0.0, 1.0);
+                        fl_color = color;
+                    }
+                ",
+
+                fragment: "
+                    #version 140
+                    in vec3 fl_color;
+                    out vec4 color;
+                    void main() {
+                        color = vec4(fl_color, 1.0);
+                    }
+                "
+                                            },
+                                            ).unwrap());
+                }
 
                 let uniforms = uniform! {
                     matrix: [
@@ -432,6 +504,7 @@ fn main() {
                 };
                 target.draw(&vertex_buffer, &point_index_buffer, program.as_ref().unwrap(), &uniforms, &draw_parameters).unwrap();
                 target.draw(&vertex_buffer, &line_index_buffer, program.as_ref().unwrap(), &uniforms, &draw_parameters).unwrap();
+                target.draw(&vertex_buffer_cppn, &glium::index::NoIndices(PrimitiveType::Points), program_vertex.as_ref().unwrap(), &uniforms, &draw_parameters).unwrap();
 
             }
             );

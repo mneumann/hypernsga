@@ -1,4 +1,5 @@
-use cppn_ext::cppn::{Cppn, CppnNode};
+pub use cppn_ext::cppn::Cppn;
+use cppn_ext::cppn::{CppnNode};
 use cppn_ext::activation_function::ActivationFunction;
 pub use cppn_ext::activation_function::GeometricActivationFunction;
 use weight::{Weight, WeightRange, WeightPerturbanceMethod, gaussian};
