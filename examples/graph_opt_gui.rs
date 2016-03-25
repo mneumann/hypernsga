@@ -413,11 +413,6 @@ fn main() {
     loop {
         {
             support.render(CLEAR_COLOR, |display, imgui, renderer, target, delta_f| {
-                let (width, height) = target.get_dimensions();
-                let ui = imgui.frame(width, height, delta_f);
-                gui(&ui, &mut state);
-                renderer.render(target, ui).unwrap();
-
                 let best_ind = &parents.individuals()[best_individual_i];
 
                 let mut network_builder = VizNetworkBuilder::new();
@@ -539,6 +534,11 @@ fn main() {
                 target.draw(&vertex_buffer, &line_index_buffer, program.as_ref().unwrap(), &uniforms, &draw_parameters).unwrap();
                 target.draw(&vertex_buffer_cppn, &glium::index::NoIndices(PrimitiveType::Points), program_vertex.as_ref().unwrap(), &uniforms, &draw_parameters).unwrap();
                 target.draw(&vertex_buffer_cppn, &cppn_index_buffer, program_vertex.as_ref().unwrap(), &uniforms, &draw_parameters).unwrap();
+
+                let (width, height) = target.get_dimensions();
+                let ui = imgui.frame(width, height, delta_f);
+                gui(&ui, &mut state);
+                renderer.render(target, ui).unwrap();
             }
             );
 
