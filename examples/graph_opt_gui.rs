@@ -45,13 +45,13 @@ const CLEAR_COLOR: (f32, f32, f32, f32) = (1.0, 1.0, 1.0, 1.0);
 
 #[derive(Copy, Clone)]
 struct Vertex {
-    position: [f32; 2],
+    position: [f32; 3],
     color: [f32; 3],
 }
 
 #[derive(Copy, Clone)]
 struct Point {
-    position: [f32; 2],
+    position: [f32; 3],
 }
 
 implement_vertex!(Vertex, position, color);
@@ -64,7 +64,7 @@ pub struct VizNetworkBuilder {
 }
 
 impl NetworkBuilder for VizNetworkBuilder {
-    type POS = Position2d;
+    type POS = Position3d;
     type NT = Neuron;
     type Output = ();
 
@@ -77,7 +77,7 @@ impl NetworkBuilder for VizNetworkBuilder {
 
     fn add_node(&mut self, node: &Node<Self::POS, Self::NT>, _param: f64) {
         assert!(node.index == self.point_list.len());
-        self.point_list.push(Point{position: [node.position.x() as f32, node.position.y() as f32]});
+        self.point_list.push(Point{position: [node.position.x() as f32, node.position.y() as f32, node.position.z() as f32]});
     }
 
     fn add_link(&mut self,
@@ -90,7 +90,6 @@ impl NetworkBuilder for VizNetworkBuilder {
 
         self.link_index_list.push(source_node.index as u32);
         self.link_index_list.push(target_node.index as u32);
-        //let _ = self.builder.add_edge(source_node.index, target_node.index, Closed01::new(w as f32)); 
     }
 
     fn network(self) -> Self::Output {
@@ -126,6 +125,11 @@ struct State {
     nm_edge_score: bool,
     nm_iters: i32,
     nm_eps: f32,
+
+
+    rotate_substrate_x: f32,
+    rotate_substrate_y: f32,
+    rotate_substrate_z: f32,
 }
 
 struct EvoConfig {
@@ -183,6 +187,12 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State) {
             if ui.collapsing_header(im_str!("Selection")).build() {
                 ui.slider_i32(im_str!("Tournament Size"), &mut state.k, 1, state.mu).build();
                 ui.slider_f32(im_str!("NSGP Objective Epsilon"), &mut state.nsgp_objective_eps, 0.0, 1.0).build();
+            }
+
+            if ui.collapsing_header(im_str!("View")).build() {
+                ui.slider_f32(im_str!("Rotate Substrate x"), &mut state.rotate_substrate_x, 0.0, 360.0).build();
+                ui.slider_f32(im_str!("Rotate Substrate y"), &mut state.rotate_substrate_y, 0.0, 360.0).build();
+                ui.slider_f32(im_str!("Rotate Substrate z"), &mut state.rotate_substrate_z, 0.0, 360.0).build();
             }
 
             if ui.collapsing_header(im_str!("CPPN")).build() {
@@ -248,13 +258,13 @@ fn main() {
 
     let mut domain_fitness_eval = GraphSimilarity {
         target_graph: graph::load_graph_normalized(&graph_file),
-        edge_score: true,
+        edge_score: false,
         iters: 50,
         eps: 0.01,
     };
 
     // XXX
-    let mut substrate: Substrate<Position2d, Neuron> = Substrate::new();
+    let mut substrate: Substrate<Position3d, Neuron> = Substrate::new();
     let node_count = domain_fitness_eval.target_graph_node_count();
 
     println!("{:?}", node_count);
@@ -265,7 +275,7 @@ fn main() {
     // Input layer
     {
         for x in DistributeInterval::new(node_count.inputs, min, max) {
-            substrate.add_node(Position2d::new(x, 0.75),
+            substrate.add_node(Position3d::new(x, 0.0, 0.75),
             Neuron::Input,
             NodeConnectivity::Out);
         }
@@ -274,7 +284,7 @@ fn main() {
     // Hidden
     {
         for x in DistributeInterval::new(node_count.hidden, min, max) {
-            substrate.add_node(Position2d::new(x, 0.5),
+            substrate.add_node(Position3d::new(x, 0.0, 0.25),
             Neuron::Hidden,
             NodeConnectivity::InOut);
         }
@@ -283,7 +293,7 @@ fn main() {
     // Outputs
     {
         for x in DistributeInterval::new(node_count.outputs, min, max) {
-            substrate.add_node(Position2d::new(x, 0.25),
+            substrate.add_node(Position3d::new(x, 0.0, -0.75),
             Neuron::Output,
             NodeConnectivity::In);
         }
@@ -311,7 +321,7 @@ fn main() {
             crossover_weights: 0,
         },
         activation_functions: vec![
-            GeometricActivationFunction::Linear,
+            //GeometricActivationFunction::Linear,
             GeometricActivationFunction::BipolarGaussian,
             GeometricActivationFunction::BipolarSigmoid,
             GeometricActivationFunction::Sine,
@@ -350,7 +360,7 @@ fn main() {
     let mut parents = {
         let mut initial = UnratedPopulation::new();
         for _ in 0..evo_config.mu {
-            initial.push(random_genome_creator.create::<_, Position2d>(&mut rng));
+            initial.push(random_genome_creator.create::<_, Position3d>(&mut rng));
         }
         let mut rated = initial.rate_in_parallel(&|ind| {
             fitness(ind,
@@ -405,6 +415,10 @@ fn main() {
         weight_perturbance_sigma: weight_perturbance_sigma as f32,
         link_weight_range: link_weight_range as f32,
         link_weight_creation_sigma: reproduction.link_weight_creation_sigma as f32,
+
+        rotate_substrate_x: 45.0,
+        rotate_substrate_y: 0.0,
+        rotate_substrate_z: 0.0,
     };
 
     let mut program: Option<glium::Program> = None;
@@ -434,8 +448,8 @@ fn main() {
                 let layers = cppn.group_layers();
                 let mut dy = DistributeInterval::new(layers.len(), -1.0, 1.0);
 
-                let mut node_positions: Vec<_> = best_ind.genome().network().nodes().iter().map(|node| {
-                    graph_layout::P2d(0.0, 0.0)
+                let mut cppn_node_positions: Vec<_> = best_ind.genome().network().nodes().iter().map(|node| {
+                    Vertex{position: [0.0, 0.0, 0.0], color: [0.0, 1.0, 0.0]}
                 }).collect();
 
                 for layer in layers {
@@ -443,7 +457,8 @@ fn main() {
                     let mut dx = DistributeInterval::new(layer.len(), -1.0, 1.0);
                     for nodeidx in layer {
                         let x = dx.next().unwrap();
-                        node_positions[nodeidx] = graph_layout::P2d(x as f32, y as f32);
+                        cppn_node_positions[nodeidx].position[0] = x as f32;
+                        cppn_node_positions[nodeidx].position[1] = -y as f32;
                     }
                 }
 
@@ -455,15 +470,7 @@ fn main() {
                     cppn_links.push(dst as u32);
                 });
 
-                let cppn_vertices: Vec<_> = node_positions.iter().map(|p2d| Vertex{position: [p2d.0, p2d.1], color: [0.0, 1.0, 0.0]}
-                                                                     ).collect();
-
-
-
-                let vertex_buffer_cppn = {
-                    glium::VertexBuffer::new(display, &cppn_vertices).unwrap()
-                };
-
+                let vertex_buffer_cppn = glium::VertexBuffer::new(display, &cppn_node_positions).unwrap();
                 let cppn_index_buffer = glium::IndexBuffer::new(display, PrimitiveType::LinesList, &cppn_links).unwrap();
 
                 if program.is_none() {
@@ -472,9 +479,9 @@ fn main() {
                                                 vertex: "
                     #version 140
                     uniform mat4 matrix;
-                    in vec2 position;
+                    in vec3 position;
                     void main() {
-                        gl_Position = matrix * vec4(position, 0.0, 1.0);
+                        gl_Position = matrix * vec4(position, 1.0);
                     }
                 ",
 
@@ -495,11 +502,11 @@ fn main() {
                                                        vertex: "
                     #version 140
                     uniform mat4 matrix;
-                    in vec2 position;
+                    in vec3 position;
                     in vec3 color;
                     out vec3 fl_color;
                     void main() {
-                        gl_Position = matrix * vec4(position, 0.0, 1.0);
+                        gl_Position = matrix * vec4(position, 1.0);
                         fl_color = color;
                     }
                 ",
@@ -516,7 +523,20 @@ fn main() {
                                                    ).unwrap());
                 }
 
+                let rx = state.rotate_substrate_x.to_radians();
+                let ry = state.rotate_substrate_y.to_radians();
+                let rz = state.rotate_substrate_z.to_radians();
+
                 let uniforms = uniform! {
+                    matrix: [
+                        [ry.cos()*rz.cos(), -ry.cos()*rz.sin(), ry.sin(), 0.0],
+                        [rx.cos()*rz.sin() + rx.sin()*ry.sin()*rz.cos(), rx.cos()*rz.cos() - rx.sin()*ry.sin()*rz.sin(), -rx.sin()*ry.cos(), 0.0],
+                        [rx.sin()*rz.sin() - rx.cos()*ry.sin()*rz.cos(), rx.sin()*rz.cos() + rx.cos()*ry.sin()*rz.sin(), rx.cos()*ry.cos(), 0.0],
+                        [0.0, 0.0, 0.0, 1.0f32]
+                    ],
+                };
+
+                let uniforms_cppn = uniform! {
                     matrix: [
                         [1.0, 0.0, 0.0, 0.0],
                         [0.0, 1.0, 0.0, 0.0],
@@ -528,12 +548,20 @@ fn main() {
                 let draw_parameters = glium::draw_parameters::DrawParameters {
                     line_width: Some(1.0),
                     point_size: Some(10.0),
+                    viewport: Some(glium::Rect {left: 0, bottom: 0, width: 400, height: 400}), 
                     .. Default::default()
                 };
+                let draw_parameters2 = glium::draw_parameters::DrawParameters {
+                    line_width: Some(1.0),
+                    point_size: Some(10.0),
+                    .. Default::default()
+                };
+
                 target.draw(&vertex_buffer, &point_index_buffer, program.as_ref().unwrap(), &uniforms, &draw_parameters).unwrap();
                 target.draw(&vertex_buffer, &line_index_buffer, program.as_ref().unwrap(), &uniforms, &draw_parameters).unwrap();
-                target.draw(&vertex_buffer_cppn, &glium::index::NoIndices(PrimitiveType::Points), program_vertex.as_ref().unwrap(), &uniforms, &draw_parameters).unwrap();
-                target.draw(&vertex_buffer_cppn, &cppn_index_buffer, program_vertex.as_ref().unwrap(), &uniforms, &draw_parameters).unwrap();
+
+                target.draw(&vertex_buffer_cppn, &glium::index::NoIndices(PrimitiveType::Points), program_vertex.as_ref().unwrap(), &uniforms_cppn, &draw_parameters2).unwrap();
+                target.draw(&vertex_buffer_cppn, &cppn_index_buffer, program_vertex.as_ref().unwrap(), &uniforms_cppn, &draw_parameters2).unwrap();
 
                 let (width, height) = target.get_dimensions();
                 let ui = imgui.frame(width, height, delta_f);
