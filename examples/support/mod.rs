@@ -7,6 +7,9 @@ use imgui::{ImGui, Ui, ImGuiKey};
 use imgui::glium_renderer::Renderer;
 use time::SteadyTime;
 
+use glium::index::PrimitiveType;
+use glium;
+
 pub struct Support {
     display: GlutinFacade,
     imgui: ImGui,
@@ -15,7 +18,18 @@ pub struct Support {
     mouse_pos: (i32, i32),
     mouse_pressed: (bool, bool, bool),
     mouse_wheel: f32,
+    vertex_buffer: glium::VertexBuffer<Vertex>,
+    index_buffer: glium::IndexBuffer<u16>,
+    program: glium::Program,
 }
+
+#[derive(Copy, Clone)]
+struct Vertex {
+    position: [f32; 2],
+    color: [f32; 3],
+}
+
+implement_vertex!(Vertex, position, color);
 
 impl Support {
     pub fn init() -> Support {
@@ -46,6 +60,46 @@ impl Support {
         imgui.set_imgui_key(ImGuiKey::Y, 17);
         imgui.set_imgui_key(ImGuiKey::Z, 18);
 
+        let vertex_buffer = {
+            glium::VertexBuffer::new(&display,
+                &[
+                Vertex { position: [-0.5, -0.5], color: [0.0, 1.0, 0.0] },
+                Vertex { position: [ 0.0,  0.5], color: [0.0, 0.0, 1.0] },
+                Vertex { position: [ 0.5, -0.5], color: [1.0, 0.0, 0.0] },
+                ]
+            ).unwrap()
+        };
+
+        let index_buffer = glium::IndexBuffer::new(&display, PrimitiveType::TrianglesList,
+                                               &[0u16, 1, 2]).unwrap();
+
+
+        let program = program!(&display,
+         140 => {
+            vertex: "
+                #version 140
+                uniform mat4 matrix;
+                in vec2 position;
+                in vec3 color;
+                out vec3 vColor;
+                void main() {
+                    gl_Position = vec4(position, 0.0, 1.0) * matrix;
+                    vColor = color;
+                }
+            ",
+
+            fragment: "
+                #version 140
+                in vec3 vColor;
+                out vec4 f_color;
+                void main() {
+                    f_color = vec4(vColor, 1.0);
+                }
+            "
+        },
+      ).unwrap();
+
+
         Support {
             display: display,
             imgui: imgui,
@@ -53,7 +107,10 @@ impl Support {
             last_frame: SteadyTime::now(),
             mouse_pos: (0, 0),
             mouse_pressed: (false, false, false),
-            mouse_wheel: 0.0
+            mouse_wheel: 0.0,
+            vertex_buffer: vertex_buffer,
+            index_buffer: index_buffer,
+            program: program,
         }
     }
 
@@ -82,6 +139,16 @@ impl Support {
         f(&ui);
         self.renderer.render(&mut target, ui).unwrap();
 
+        let uniforms = uniform! {
+            matrix: [
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0f32]
+            ]
+        };
+
+        target.draw(&self.vertex_buffer, &self.index_buffer, &self.program, &uniforms, &Default::default()).unwrap();
         // XXX
 
         target.finish().unwrap();
