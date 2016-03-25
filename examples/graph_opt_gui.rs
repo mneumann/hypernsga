@@ -20,7 +20,7 @@ use hypernsga::fitness::{Fitness, DomainFitness};
 use hypernsga::mating::MatingMethodWeights;
 use hypernsga::prob::Prob;
 use hypernsga::weight::{WeightPerturbanceMethod, WeightRange};
-use hypernsga::substrate::{Substrate, SubstrateConfiguration, Position, Position3d, Position2d,
+use hypernsga::substrate::{Node, Substrate, SubstrateConfiguration, Position, Position3d, Position2d,
 NodeConnectivity};
 use hypernsga::distribute::DistributeInterval;
 use nsga2::selection::SelectNSGP;
@@ -48,7 +48,54 @@ struct Vertex {
     color: [f32; 3],
 }
 
+#[derive(Copy, Clone)]
+struct Point {
+    position: [f32; 2],
+}
+
 implement_vertex!(Vertex, position, color);
+implement_vertex!(Point, position);
+
+
+pub struct VizNetworkBuilder {
+    point_list: Vec<Point>,
+    link_index_list: Vec<u32>,
+}
+
+impl NetworkBuilder for VizNetworkBuilder {
+    type POS = Position2d;
+    type NT = Neuron;
+    type Output = ();
+
+    fn new() -> Self {
+        VizNetworkBuilder {
+            point_list: Vec::new(),
+            link_index_list: Vec::new(),
+        }
+    }
+
+    fn add_node(&mut self, node: &Node<Self::POS, Self::NT>, _param: f64) {
+        assert!(node.index == self.point_list.len());
+        self.point_list.push(Point{position: [node.position.x() as f32, node.position.y() as f32]});
+    }
+
+    fn add_link(&mut self,
+                source_node: &Node<Self::POS, Self::NT>,
+                target_node: &Node<Self::POS, Self::NT>,
+                weight1: f64,
+                _weight2: f64) {
+        let w = weight1.abs();
+        debug_assert!(w <= 1.0);
+
+        self.link_index_list.push(source_node.index as u32);
+        self.link_index_list.push(target_node.index as u32);
+        //let _ = self.builder.add_edge(source_node.index, target_node.index, Closed01::new(w as f32)); 
+    }
+
+    fn network(self) -> Self::Output {
+        ()
+    }
+}
 
 #[derive(Debug)]
 struct State {
@@ -66,7 +113,7 @@ struct State {
     mutate_weights: i32,
 
     best_fitness_history: Vec<(usize, f64)>
-    //crossover_weights: 0,
+        //crossover_weights: 0,
 }
 
 struct EvoConfig {
@@ -105,14 +152,14 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State) {
                 let num_points = state.best_fitness_history.len();
                 unsafe {
                     igPlotLines2(im_str!("performance").as_ptr(),
-                                values_getter,
-                                (state as *mut State) as *mut c_void,
-                                num_points as c_int,
-                                0 as c_int,
-                                im_str!("overlay text").as_ptr(),
-                                0.0 as c_float,
-                                1.0 as c_float,
-                                ImVec2::new(400.0, 50.0)
+                    values_getter,
+                    (state as *mut State) as *mut c_void,
+                    num_points as c_int,
+                    0 as c_int,
+                    im_str!("overlay text").as_ptr(),
+                    0.0 as c_float,
+                    1.0 as c_float,
+                    ImVec2::new(400.0, 50.0)
                     );
                 }
             }
@@ -136,12 +183,14 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State) {
         })
 }
 
-fn fitness<'a, P>(genome: &G,
-                  expression: &Expression,
-                  substrate_config: &SubstrateConfiguration<'a, P, Neuron>,
-                  fitness_eval: &GraphSimilarity)
--> Fitness
-where P: Position
+
+
+fn fitness<P>(genome: &G,
+              expression: &Expression,
+              substrate_config: &SubstrateConfiguration<P, Neuron>,
+              fitness_eval: &GraphSimilarity)
+    -> Fitness
+    where P: Position
 {
 
     let mut network_builder = NeuronNetworkBuilder::new();
@@ -180,8 +229,8 @@ fn main() {
 
     println!("{:?}", node_count);
 
-    let min = -3.0;
-    let max = 3.0;
+    let min = -1.0;
+    let max = 1.0;
 
     // Input layer
     {
@@ -287,12 +336,16 @@ fn main() {
                      &mut rng)
     };
 
-    let best_fitness = {
-        let best_individual = parents.individuals().iter().max_by_key(|ind| {
-            (ind.fitness().domain_fitness * 1_000_000.0) as usize
-        });
-        best_individual.map(|ind| ind.fitness().domain_fitness).unwrap_or(0.0)
-    };
+
+    let mut best_individual_i = 0;
+    let mut best_fitness = parents.individuals()[best_individual_i].fitness().domain_fitness;
+    for (i, ind) in parents.individuals().iter().enumerate() {
+        let fitness = ind.fitness().domain_fitness;
+        if fitness > best_fitness {
+            best_fitness = fitness;
+            best_individual_i = i;
+        }
+    }
 
     let mut state = State {
         running: false,
@@ -312,6 +365,7 @@ fn main() {
         best_fitness_history: vec![(0, best_fitness)],
     };
 
+    let mut program: Option<glium::Program> = None;
 
     loop {
         {
@@ -321,62 +375,63 @@ fn main() {
                 gui(&ui, &mut state);
                 renderer.render(target, ui).unwrap();
 
+                let best_ind = &parents.individuals()[best_individual_i];
 
-        let vertex_buffer = {
-            glium::VertexBuffer::new(display,
-                &[
-                Vertex { position: [-0.5, -0.5], color: [0.0, 1.0, 0.0] },
-                Vertex { position: [ 0.0,  0.5], color: [0.0, 0.0, 1.0] },
-                Vertex { position: [ -0.5, -0.51], color: [1.0, 0.0, 0.0] },
-                ]
-            ).unwrap()
-        };
+                let mut network_builder = VizNetworkBuilder::new();
+                let (_, _) = expression.express(&best_ind.genome(),
+                &mut network_builder,
+                &substrate_config);
 
 
-        let index_buffer = glium::IndexBuffer::new(display, PrimitiveType::TrianglesList,
-                                               &[0u16, 1, 2]).unwrap();
+                let vertex_buffer = {
+                    glium::VertexBuffer::new(display, &network_builder.point_list).unwrap()
+                };
 
-        let program = program!(display,
-         140 => {
-            vertex: "
-                #version 140
-                uniform mat4 matrix;
-                in vec2 position;
-                in vec3 color;
-                out vec3 vColor;
-                void main() {
-                    gl_Position = vec4(position, 0.0, 1.0) * matrix;
-                    vColor = color;
+                let point_index_buffer = glium::index::NoIndices(PrimitiveType::Points);
+                let line_index_buffer  = glium::IndexBuffer::new(display, PrimitiveType::LinesList,
+                                                                 &network_builder.link_index_list).unwrap();
+
+
+                if program.is_none() {
+                    program = Some(program!(display,
+                                            140 => {
+                                                vertex: "
+                    #version 140
+                    uniform mat4 matrix;
+                    in vec2 position;
+                    void main() {
+                        gl_Position = matrix * vec4(position, 0.0, 1.0);
+                    }
+                ",
+
+                fragment: "
+                    #version 140
+                    out vec4 color;
+                    void main() {
+                        color = vec4(1.0, 0.0, 0.0, 1.0);
+                    }
+                "
+                                            },
+                                            ).unwrap());
                 }
-            ",
 
-            fragment: "
-                #version 140
-                in vec3 vColor;
-                out vec4 f_color;
-                void main() {
-                    //f_color = vec4(vColor, 1.0);
-                    f_color = vec4(1.0, 0.0, 0.0, 1.0);
-                }
-            "
-        },
-      ).unwrap();
 
-        let uniforms = uniform! {
-            matrix: [
-                [1.0, 0.0, 0.0, 0.0],
-                [0.0, 1.0, 0.0, 0.0],
-                [0.0, 0.0, 1.0, 0.0],
-                [0.0, 0.0, 0.0, 1.0f32]
-            ]
-        };
+                let uniforms = uniform! {
+                    matrix: [
+                        [1.0, 0.0, 0.0, 0.0],
+                        [0.0, 1.0, 0.0, 0.0],
+                        [0.0, 0.0, 1.0, 0.0],
+                        [0.0, 0.0, 0.0, 1.0f32]
+                    ]
+                };
 
-        let draw_parameters = glium::draw_parameters::DrawParameters {
-            line_width: Some(1.0),
-            point_size: Some(1.0),
-            .. Default::default()
-        };
-        target.draw(&vertex_buffer, &index_buffer, &program, &uniforms, &draw_parameters).unwrap();
+                let draw_parameters = glium::draw_parameters::DrawParameters {
+                    line_width: Some(1.0),
+                    point_size: Some(10.0),
+                    .. Default::default()
+                };
+                target.draw(&vertex_buffer, &point_index_buffer, program.as_ref().unwrap(), &uniforms, &draw_parameters).unwrap();
+                target.draw(&vertex_buffer, &line_index_buffer, program.as_ref().unwrap(), &uniforms, &draw_parameters).unwrap();
 
             }
             );
@@ -418,11 +473,18 @@ fn main() {
                                       &selection,
                                       &mut rng);
 
-            let best_individual = parents.individuals().iter().max_by_key(|ind| {
-                (ind.fitness().domain_fitness * 1_000_000.0) as usize
-            });
-            state.best_fitness = best_individual.map(|ind| ind.fitness().domain_fitness)
-                .unwrap_or(0.0);
+
+            best_individual_i = 0;
+            best_fitness = parents.individuals()[best_individual_i].fitness().domain_fitness; 
+            for (i, ind) in parents.individuals().iter().enumerate() {
+                let fitness = ind.fitness().domain_fitness;
+                if fitness > best_fitness {
+                    best_fitness = fitness;
+                    best_individual_i = i;
+                }
+            }
+
+            state.best_fitness = best_fitness;
             state.best_fitness_history.push((state.iteration, state.best_fitness));
         }
     }

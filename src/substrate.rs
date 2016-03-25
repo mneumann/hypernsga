@@ -47,10 +47,10 @@ impl<P, T> Substrate<P, T> where P: Position
 
     /// Determines all possible node pairs.
 
-    pub fn to_configuration<'a>(&'a self) -> SubstrateConfiguration<'a, P, T> {
+    pub fn to_configuration(self) -> SubstrateConfiguration<P, T> {
         let mut pairs = Vec::new();
 
-        for source in self.nodes.iter() {
+        for (source_idx, source) in self.nodes.iter().enumerate() {
             // Reject invalid connections.
             match source.node_connectivity {
                 NodeConnectivity::Out | NodeConnectivity::InOut => {}
@@ -60,10 +60,10 @@ impl<P, T> Substrate<P, T> where P: Position
                 }
             }
 
-            for target in self.nodes.iter() {
+            for (target_idx, target) in self.nodes.iter().enumerate() {
                 match target.node_connectivity {
                     NodeConnectivity::In | NodeConnectivity::InOut => {
-                        pairs.push((source, target));
+                        pairs.push((source_idx, target_idx));
                     }
                     NodeConnectivity::Out => {
                         // Node does not allow incoming connections
@@ -73,7 +73,7 @@ impl<P, T> Substrate<P, T> where P: Position
         }
 
         SubstrateConfiguration {
-            nodes: &self.nodes,
+            nodes: self.nodes,
             links: pairs,
             null_position: P::origin(), // XXX: we might want something else than origin.
         }
@@ -81,23 +81,21 @@ impl<P, T> Substrate<P, T> where P: Position
 }
 
 #[derive(Clone, Debug)]
-pub struct SubstrateConfiguration<'a, P, T>
-    where P: Position + 'a,
-          T: 'a
+pub struct SubstrateConfiguration<P, T>
+    where P: Position,
 {
-    nodes: &'a [Node<P, T>],
-    links: Vec<(&'a Node<P, T>, &'a Node<P, T>)>,
+    nodes: Vec<Node<P, T>>,
+    links: Vec<(usize, usize)>,
     null_position: P,
 }
 
-impl<'a, P, T> SubstrateConfiguration<'a, P, T>
-    where P: Position + 'a,
-          T: 'a
+impl<P, T> SubstrateConfiguration<P, T>
+    where P: Position
 {
     pub fn nodes(&self) -> &[Node<P, T>] {
-        self.nodes
+        &self.nodes
     }
-    pub fn links(&self) -> &[(&'a Node<P, T>, &'a Node<P, T>)] {
+    pub fn links(&self) -> &[(usize, usize)] {
         &self.links
     }
 

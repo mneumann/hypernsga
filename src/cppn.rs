@@ -26,11 +26,11 @@ const CPPN_OUTPUT_NODE_WEIGHT: usize = 3;
 ///
 /// Returns the Behavior and Connection Cost of the developed network
 
-fn develop_cppn<'a, P, AF, T, V>(cppn: &mut Cppn<CppnNode<AF>, Weight, ()>,
-                                 substrate_config: &SubstrateConfiguration<'a, P, T>,
-                                 visitor: &mut V,
-                                 leo_threshold: f64)
-                                 -> (Behavior, f64)
+fn develop_cppn<P, AF, T, V>(cppn: &mut Cppn<CppnNode<AF>, Weight, ()>,
+                             substrate_config: &SubstrateConfiguration<P, T>,
+                             visitor: &mut V,
+                             leo_threshold: f64)
+                             -> (Behavior, f64)
     where P: Position,
           AF: ActivationFunction,
           V: NetworkBuilder<POS = P, NT = T>
@@ -72,7 +72,9 @@ fn develop_cppn<'a, P, AF, T, V>(cppn: &mut Cppn<CppnNode<AF>, Weight, ()>,
         visitor.add_node(node, node_weight)
     }
 
-    for &(source_node, target_node) in links.iter() {
+    for &(source_node_idx, target_node_idx) in links.iter() {
+        let source_node = &nodes[source_node_idx];
+        let target_node = &nodes[target_node_idx];
         let inputs = [source_node.position.coords(), target_node.position.coords()];
         cppn.process(&inputs[..]);
 
@@ -110,7 +112,7 @@ pub struct CppnDriver<'a, DOMFIT, G, P, T, NETBUILDER>
 {
     pub link_expression_threshold: f64,
 
-    pub substrate_configuration: SubstrateConfiguration<'a, P, T>,
+    pub substrate_configuration: SubstrateConfiguration<P, T>,
     pub domain_fitness: &'a DOMFIT,
     pub _netbuilder: PhantomData<NETBUILDER>,
 
@@ -371,13 +373,11 @@ pub struct Expression {
 }
 
 impl Expression {
-    pub fn express<'a, NETBUILDER, POS, NT, GRAPH>(&self,
-                                                   ind: &G,
-                                                   net_builder: &mut NETBUILDER,
-                                                   substrate_config: &SubstrateConfiguration<'a,
-                                                                                             POS,
-                                                                                             NT>)
-                                                   -> (Behavior, f64)
+    pub fn express<NETBUILDER, POS, NT, GRAPH>(&self,
+                                               ind: &G,
+                                               net_builder: &mut NETBUILDER,
+                                               substrate_config: &SubstrateConfiguration<POS, NT>)
+                                               -> (Behavior, f64)
         where NETBUILDER: NetworkBuilder<POS = POS, NT = NT, Output = GRAPH>,
               POS: Position
     {
