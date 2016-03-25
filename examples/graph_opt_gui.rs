@@ -8,6 +8,8 @@ extern crate glium;
 #[macro_use]
 extern crate imgui;
 extern crate time;
+extern crate imgui_sys;
+extern crate libc;
 
 use hypernsga::graph;
 use hypernsga::domain_graph::{Neuron, NeuronNetworkBuilder, GraphSimilarity};
@@ -26,14 +28,18 @@ use nsga2::population::{UnratedPopulation, RatedPopulation, RankedPopulation};
 use std::f64::INFINITY;
 use criterion_stats::univariate::Sample;
 use std::env;
+use std::mem;
 
 use imgui::*;
 use self::support::Support;
+use imgui_sys::igPlotLines2;
+use libc::*;
 
 mod support;
 
 const CLEAR_COLOR: (f32, f32, f32, f32) = (1.0, 1.0, 1.0, 1.0);
 
+#[derive(Debug)]
 struct State {
     iteration: usize,
     best_fitness: f64,
@@ -47,6 +53,8 @@ struct State {
     mutate_connect: i32,
     mutate_disconnect: i32,
     mutate_weights: i32,
+
+    best_fitness_history: Vec<(usize, f64)>
     //crossover_weights: 0,
 }
 
@@ -55,6 +63,13 @@ struct EvoConfig {
     lambda: usize,
     k: usize,
     num_objectives: usize,
+}
+
+extern "C" fn values_getter(data: *mut c_void, idx: c_int) -> c_float {
+    unsafe {
+        let state: &mut State = mem::transmute(data);
+        state.best_fitness_history.get(idx as usize).map(|e| e.1).unwrap() as c_float
+    }
 }
 
 fn gui<'a>(ui: &Ui<'a>, state: &mut State) {
@@ -73,6 +88,21 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State) {
                     if ui.small_button(im_str!("START")) {
                         state.running = true;
                     }
+                }
+                ui.separator();
+
+                let num_points = state.best_fitness_history.len();
+                unsafe {
+                    igPlotLines2(im_str!("performance").as_ptr(),
+                                values_getter,
+                                (state as *mut State) as *mut c_void,
+                                num_points as c_int,
+                                0 as c_int,
+                                im_str!("overlay text").as_ptr(),
+                                0.0 as c_float,
+                                1.0 as c_float,
+                                ImVec2::new(400.0, 50.0)
+                    );
                 }
             }
             if ui.collapsing_header(im_str!("Population Settings")).build() {
@@ -267,6 +297,8 @@ fn main() {
         mutate_connect: reproduction.mating_method_weights.mutate_connect as i32,
         mutate_disconnect: reproduction.mating_method_weights.mutate_disconnect as i32,
         mutate_weights: reproduction.mating_method_weights.mutate_weights as i32,
+
+        best_fitness_history: vec![(0, best_fitness)],
     };
 
     loop {
@@ -317,6 +349,7 @@ fn main() {
             });
             state.best_fitness = best_individual.map(|ind| ind.fitness().domain_fitness)
                 .unwrap_or(0.0);
+            state.best_fitness_history.push((state.iteration, state.best_fitness));
         }
     }
 }

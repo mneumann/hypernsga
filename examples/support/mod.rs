@@ -1,4 +1,4 @@
-// Taken from https://github.com/Gekkio/imgui-rs/blob/master/examples/support/mod.rs 
+// Adapted from https://github.com/Gekkio/imgui-rs/blob/master/examples/support/mod.rs 
 use glium::{DisplayBuild, Surface};
 use glium::backend::glutin_backend::GlutinFacade;
 use glium::glutin;
@@ -81,6 +81,8 @@ impl Support {
         let ui = self.imgui.frame(width, height, delta_f);
         f(&ui);
         self.renderer.render(&mut target, ui).unwrap();
+
+        // XXX
 
         target.finish().unwrap();
     }
