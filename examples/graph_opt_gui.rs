@@ -411,32 +411,24 @@ fn main() {
                     }
                 }
 
-                /*
-                let mut node_positions: Vec<_> = best_ind.genome().network().nodes().iter().map(|node| {
-                    let x: f32 = rng.gen();
-                    let y: f32 = rng.gen();
-                    graph_layout::P2d(x, y)
-                }).collect();
-                let mut node_neighbors: Vec<Vec<usize>> = node_positions.iter().map(|_| Vec::new()).collect();
-
+                let mut cppn_links = Vec::new();
                 best_ind.genome().network().each_link_ref(|link_ref| {
                     let src = link_ref.link().source_node_index().index();
                     let dst = link_ref.link().target_node_index().index();
-                    node_neighbors[src].push(dst);
-                    node_neighbors[dst].push(src);
+                    cppn_links.push(src as u32);
+                    cppn_links.push(dst as u32);
                 });
 
-                graph_layout::fruchterman_reingold::layout_typical_2d(Some(0.001), &mut node_positions, &node_neighbors, best_ind.genome().protected_nodes());
-
-                */
                 let cppn_vertices: Vec<_> = node_positions.iter().map(|p2d| Vertex{position: [p2d.0, p2d.1], color: [0.0, 1.0, 0.0]}
-                ).collect();
+                                                                     ).collect();
 
 
 
                 let vertex_buffer_cppn = {
                     glium::VertexBuffer::new(display, &cppn_vertices).unwrap()
                 };
+
+                let cppn_index_buffer = glium::IndexBuffer::new(display, PrimitiveType::LinesList, &cppn_links).unwrap();
 
                 if program.is_none() {
                     program = Some(program!(display,
@@ -463,8 +455,8 @@ fn main() {
 
                 if program_vertex.is_none() {
                     program_vertex = Some(program!(display,
-                                            140 => {
-                                                vertex: "
+                                                   140 => {
+                                                       vertex: "
                     #version 140
                     uniform mat4 matrix;
                     in vec2 position;
@@ -484,8 +476,8 @@ fn main() {
                         color = vec4(fl_color, 1.0);
                     }
                 "
-                                            },
-                                            ).unwrap());
+                                                   },
+                                                   ).unwrap());
                 }
 
                 let uniforms = uniform! {
@@ -505,7 +497,7 @@ fn main() {
                 target.draw(&vertex_buffer, &point_index_buffer, program.as_ref().unwrap(), &uniforms, &draw_parameters).unwrap();
                 target.draw(&vertex_buffer, &line_index_buffer, program.as_ref().unwrap(), &uniforms, &draw_parameters).unwrap();
                 target.draw(&vertex_buffer_cppn, &glium::index::NoIndices(PrimitiveType::Points), program_vertex.as_ref().unwrap(), &uniforms, &draw_parameters).unwrap();
-
+                target.draw(&vertex_buffer_cppn, &cppn_index_buffer, program_vertex.as_ref().unwrap(), &uniforms, &draw_parameters).unwrap();
             }
             );
 
