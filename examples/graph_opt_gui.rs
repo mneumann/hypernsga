@@ -269,13 +269,69 @@ fn render_graph(display: &GlutinFacade, target: &mut glium::Frame, genome: &G, e
         line_width: Some(1.0),
         point_size: Some(10.0),
         viewport: Some(viewport),
-            .. Default::default()
+        .. Default::default()
     };
 
     // substrate
     target.draw(&vertex_buffer, &point_index_buffer, program, &uniforms_substrate, &draw_parameters_substrate).unwrap();
     target.draw(&vertex_buffer, &line_index_buffer, program, &uniforms_substrate, &draw_parameters_substrate).unwrap();
 }
+
+fn render_cppn(display: &GlutinFacade, target: &mut glium::Frame, genome: &G, expression: &Expression, program: &glium::Program, state: &State,
+               substrate_config: &SubstrateConfiguration<Position3d, Neuron>, viewport: glium::Rect) {
+
+    // Layout the CPPN
+    let cppn = Cppn::new(genome.network());
+    let layers = cppn.group_layers();
+    let mut dy = DistributeInterval::new(layers.len(), -1.0, 1.0);
+
+    let mut cppn_node_positions: Vec<_> = genome.network().nodes().iter().map(|node| {
+        Vertex{position: [0.0, 0.0, 0.0], color: [0.0, 1.0, 0.0]}
+    }).collect();
+
+    for layer in layers {
+        let y = dy.next().unwrap();
+        let mut dx = DistributeInterval::new(layer.len(), -1.0, 1.0);
+        for nodeidx in layer {
+            let x = dx.next().unwrap();
+            cppn_node_positions[nodeidx].position[0] = x as f32;
+            cppn_node_positions[nodeidx].position[1] = -y as f32;
+        }
+    }
+
+    let mut cppn_links = Vec::new();
+    genome.network().each_link_ref(|link_ref| {
+        let src = link_ref.link().source_node_index().index();
+        let dst = link_ref.link().target_node_index().index();
+        cppn_links.push(src as u32);
+        cppn_links.push(dst as u32);
+    });
+
+    let vertex_buffer_cppn = glium::VertexBuffer::new(display, &cppn_node_positions).unwrap();
+    let cppn_index_buffer = glium::IndexBuffer::new(display, PrimitiveType::LinesList, &cppn_links).unwrap();
+
+    let uniforms_cppn = uniform! {
+        matrix: [
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0f32]
+        ]
+    };
+
+    let draw_parameters2 = glium::draw_parameters::DrawParameters {
+        line_width: Some(1.0),
+        point_size: Some(10.0),
+        viewport: Some(viewport),
+        .. Default::default()
+    };
+
+    target.draw(&vertex_buffer_cppn, &glium::index::NoIndices(PrimitiveType::Points), program, &uniforms_cppn, &draw_parameters2).unwrap();
+    target.draw(&vertex_buffer_cppn, &cppn_index_buffer, program, &uniforms_cppn, &draw_parameters2).unwrap();
+}
+
+
+
 
 fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitness>) {
     ui.window(im_str!("Evolutionary Graph Optimization"))
@@ -682,38 +738,6 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
         loop {
             {
                 support.render(CLEAR_COLOR, |display, imgui, renderer, target, delta_f| {
-                    let best_ind = &parents.individuals()[best_individual_i];
-
-
-                    // Layout the CPPN
-                    let cppn = Cppn::new(best_ind.genome().network());
-                    let layers = cppn.group_layers();
-                    let mut dy = DistributeInterval::new(layers.len(), -1.0, 1.0);
-
-                    let mut cppn_node_positions: Vec<_> = best_ind.genome().network().nodes().iter().map(|node| {
-                        Vertex{position: [0.0, 0.0, 0.0], color: [0.0, 1.0, 0.0]}
-                    }).collect();
-
-                    for layer in layers {
-                        let y = dy.next().unwrap();
-                        let mut dx = DistributeInterval::new(layer.len(), -1.0, 1.0);
-                        for nodeidx in layer {
-                            let x = dx.next().unwrap();
-                            cppn_node_positions[nodeidx].position[0] = x as f32;
-                            cppn_node_positions[nodeidx].position[1] = -y as f32;
-                        }
-                    }
-
-                    let mut cppn_links = Vec::new();
-                    best_ind.genome().network().each_link_ref(|link_ref| {
-                        let src = link_ref.link().source_node_index().index();
-                        let dst = link_ref.link().target_node_index().index();
-                        cppn_links.push(src as u32);
-                        cppn_links.push(dst as u32);
-                    });
-
-                    let vertex_buffer_cppn = glium::VertexBuffer::new(display, &cppn_node_positions).unwrap();
-                    let cppn_index_buffer = glium::IndexBuffer::new(display, PrimitiveType::LinesList, &cppn_links).unwrap();
 
                     if program_substrate.is_none() {
                         program_substrate = Some(program!(display,
@@ -770,30 +794,18 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                                                        ).unwrap());
                     }
 
+                    let best_ind = &parents.individuals()[best_individual_i];
+
                     let (substrate_width, substrate_height) = (400, 400);
+                    let (width, height) = target.get_dimensions();
+
                     render_graph(display, target, best_ind.genome(), &expression, program_substrate.as_ref().unwrap(), &state, &substrate_config,
                     glium::Rect {left: 0, bottom: 0, width: substrate_width, height: substrate_height});
 
-                    let (width, height) = target.get_dimensions();
 
-                    let uniforms_cppn = uniform! {
-                        matrix: [
-                            [1.0, 0.0, 0.0, 0.0],
-                            [0.0, 1.0, 0.0, 0.0],
-                            [0.0, 0.0, 1.0, 0.0],
-                            [0.0, 0.0, 0.0, 1.0f32]
-                        ]
-                    };
+                    render_cppn(display, target, best_ind.genome(), &expression, program_vertex.as_ref().unwrap(), &state, &substrate_config,
+                    glium::Rect {left: substrate_width, bottom: 0, width: width-substrate_width, height: height});
 
-                    let draw_parameters2 = glium::draw_parameters::DrawParameters {
-                        line_width: Some(1.0),
-                        point_size: Some(10.0),
-                        viewport: Some(glium::Rect {left: substrate_width, bottom: 0, width: width-substrate_width, height: height}),
-                        .. Default::default()
-                    };
-
-                    target.draw(&vertex_buffer_cppn, &glium::index::NoIndices(PrimitiveType::Points), program_vertex.as_ref().unwrap(), &uniforms_cppn, &draw_parameters2).unwrap();
-                    target.draw(&vertex_buffer_cppn, &cppn_index_buffer, program_vertex.as_ref().unwrap(), &uniforms_cppn, &draw_parameters2).unwrap();
 
                     let ui = imgui.frame(width, height, delta_f);
                     gui(&ui, &mut state, &parents);
