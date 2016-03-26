@@ -36,13 +36,14 @@ use rand::Rng;
 
 use imgui::*;
 use self::support::Support;
-use imgui_sys::igPlotLines2;
+use imgui_sys::{igPlotLines2, igCombo2};
 use libc::*;
 use glium::Surface;
 use glium::index::PrimitiveType;
 use std::io::Write;
 use std::fs::File;
 use glium::backend::glutin_backend::GlutinFacade;
+use std::cmp::Ordering;
 
 mod support;
 
@@ -157,6 +158,14 @@ impl<'a, W:Write> NetworkBuilder for GMLNetworkBuilder<'a, W> {
 }
 
 #[derive(Debug)]
+enum ViewMode {
+    BestDetailed,
+    CppnOverview,
+    GraphOverview,
+    Overview,
+}
+
+#[derive(Debug)]
 struct State {
     iteration: usize,
     best_fitness: f64,
@@ -205,6 +214,7 @@ struct State {
     objectives_use_complexity: bool,
 
     action: Action,
+    view: ViewMode,
 }
 
 struct EvoConfig {
@@ -413,6 +423,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
             ui.text(im_str!("Iteration: {}", state.iteration));
             ui.text(im_str!("Best Fitness: {:.3}", state.best_fitness));
             ui.separator();
+
             if state.running {
                 if ui.small_button(im_str!("STOP")) {
                     state.running = false;
@@ -427,6 +438,38 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
             }
             if ui.small_button(im_str!("Export Best")) {
                 state.action = Action::ExportBest;
+            }
+
+            let views = im_str!("detailed\0multi cppn\0multi graph\0overview\0");
+            let mut current: c_int = match state.view {
+                ViewMode::BestDetailed => {
+                    0
+                }
+                ViewMode::CppnOverview => {
+                    1
+                }
+                ViewMode::GraphOverview => {
+                    2
+                }
+                ViewMode::Overview => {
+                    3
+                }
+
+            };
+            unsafe {
+                if igCombo2(im_str!("view").as_ptr(), &mut current as *mut c_int, views.as_ptr(), 4) {
+                    if current == 0 {
+                        state.view = ViewMode::BestDetailed;
+                    } else if current == 1 {
+                        state.view = ViewMode::CppnOverview;
+                    } else if current == 2 {
+                        state.view = ViewMode::GraphOverview;
+                    } else if current == 3 {
+                        state.view = ViewMode::Overview;
+                    }
+
+
+                }
             }
 
             if ui.collapsing_header(im_str!("Population Metrics")).build() {
@@ -654,9 +697,9 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
         }
 
         let mut evo_config = EvoConfig {
-            mu: 200,
-            lambda: 100,
-            k: 5,
+            mu: 50,
+            lambda: 25,
+            k: 2,
             objectives: vec![0,1,2,3,4,5],
         };
 
@@ -802,6 +845,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
             objectives_use_complexity: true,
 
             action: Action::None,
+            view: ViewMode::BestDetailed
         };
 
         let mut program_substrate: Option<glium::Program> = None;
@@ -866,18 +910,88 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                                                        ).unwrap());
                     }
 
-                    let best_ind = &parents.individuals()[best_individual_i];
-
-                    let (substrate_width, substrate_height) = (400, 400);
                     let (width, height) = target.get_dimensions();
+                    match state.view { 
+                        ViewMode::BestDetailed => {
+                            let best_ind = &parents.individuals()[best_individual_i];
 
-                    render_graph(display, target, best_ind.genome(), &expression, program_substrate.as_ref().unwrap(), &state, &substrate_config,
-                    glium::Rect {left: 0, bottom: 0, width: substrate_width, height: substrate_height});
+                            let (substrate_width, substrate_height) = (400, 400);
+
+                            render_graph(display, target, best_ind.genome(), &expression, program_substrate.as_ref().unwrap(), &state, &substrate_config,
+                            glium::Rect {left: 0, bottom: 0, width: substrate_width, height: substrate_height});
 
 
-                    render_cppn(display, target, best_ind.genome(), &expression, program_vertex.as_ref().unwrap(), &state, &substrate_config,
-                    glium::Rect {left: substrate_width, bottom: 0, width: width-substrate_width, height: height});
+                            render_cppn(display, target, best_ind.genome(), &expression, program_vertex.as_ref().unwrap(), &state, &substrate_config,
+                            glium::Rect {left: substrate_width, bottom: 0, width: width-substrate_width, height: height});
+                        }
+                        ViewMode::Overview => { 
+                            let indiv = parents.individuals();
+                            let mut indices: Vec<_> = (0..indiv.len()).collect();
+                            indices.sort_by(|&i, &j| {
+                                match indiv[i].fitness().domain_fitness.partial_cmp(&indiv[j].fitness().domain_fitness).unwrap().reverse() {
+                                    Ordering::Equal => {
+                                        indiv[i].fitness().behavioral_diversity.partial_cmp(&indiv[j].fitness().behavioral_diversity).unwrap().reverse()
+                                    }
+                                    a => a
+                                }
+                            });
+                            let mut i = 0;
+                            'outer: for y in 0..5 {
+                                for x in 0..10 {
+                                    if i >= indiv.len() {
+                                        break 'outer;
+                                    }
+                                    let rect = glium::Rect {left: x*width/10, bottom: y*height/10, width: width/10, height: height/10};
+                                    let genome = indiv[indices[i]].genome();
+                                    render_cppn(display, target, genome, &expression, program_vertex.as_ref().unwrap(), &state, &substrate_config, rect);
+                                    i += 1;
+                                }
+                            }
 
+                            let mut i = 0;
+                            'outer: for y in 5..10 {
+                                for x in 0..10 {
+                                    if i >= indiv.len() {
+                                        break 'outer;
+                                    }
+                                    let rect = glium::Rect {left: x*width/10, bottom: y*height/10, width: width/10, height: height/10};
+                                    let genome = indiv[indices[i]].genome();
+                                    render_graph(display, target, genome, &expression, program_substrate.as_ref().unwrap(), &state, &substrate_config, rect);
+                                    i += 1;
+                                }
+                            }
+
+                        }
+
+                        ViewMode::CppnOverview | ViewMode::GraphOverview => {
+                            let indiv = parents.individuals();
+                            let mut indices: Vec<_> = (0..indiv.len()).collect();
+                            indices.sort_by(|&i, &j| {
+                                match indiv[i].fitness().domain_fitness.partial_cmp(&indiv[j].fitness().domain_fitness).unwrap().reverse() {
+                                    Ordering::Equal => {
+                                        indiv[i].fitness().behavioral_diversity.partial_cmp(&indiv[j].fitness().behavioral_diversity).unwrap().reverse()
+                                    }
+                                    a => a
+                                }
+                            });
+                            let mut i = 0;
+                            'outer: for y in 0..10 {
+                                for x in 0..10 {
+                                    if i >= indiv.len() {
+                                        break 'outer;
+                                    }
+                                    let rect = glium::Rect {left: x*width/10, bottom: y*height/10, width: width/10, height: height/10};
+                                    let genome = indiv[indices[i]].genome();
+                                    if let ViewMode::CppnOverview = state.view {
+                                        render_cppn(display, target, genome, &expression, program_vertex.as_ref().unwrap(), &state, &substrate_config, rect);
+                                    } else {
+                                        render_graph(display, target, genome, &expression, program_substrate.as_ref().unwrap(), &state, &substrate_config, rect);
+                                    }
+                                    i += 1;
+                                }
+                            }
+                        }
+                    }
 
                     let ui = imgui.frame(width, height, delta_f);
                     gui(&ui, &mut state, &parents);
