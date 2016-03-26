@@ -441,7 +441,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
 
         // Input layer
         {
-            let z = 0.75;
+            let z = 1.0;
             let y = 0.0;
             for x in DistributeInterval::new(node_count.inputs, -1.0, 1.0) {
                 substrate.add_node(Position3d::new(x, y, z),
@@ -452,7 +452,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
 
         // Hidden
         {
-            let z = 0.25;
+            let z = 0.5;
             let y = 0.0;
             for x in DistributeInterval::new(node_count.hidden, -1.0, 1.0) {
                 substrate.add_node(Position3d::new(x, y, z),
@@ -463,9 +463,11 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
 
         // Outputs
         {
-            let z = -0.5;
+            let z = 0.0;
             let y = 0.0;
+            //let mut z = DistributeInterval::new(node_count.outputs, -0.1, 0.1);
             for x in DistributeInterval::new(node_count.outputs, -1.0, 1.0) {
+                //substrate.add_node(Position3d::new(x, y, -z.next().unwrap()),
                 substrate.add_node(Position3d::new(x, y, z),
                 Neuron::Output,
                 NodeConnectivity::In);
@@ -479,19 +481,19 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
             objectives: vec![0,1,2,3,4,5],
         };
 
-        let mut selection = SelectNSGP { objective_eps: 0.01 };
+        let mut selection = SelectNSGPMod { objective_eps: 0.01 };
 
         let weight_perturbance_sigma = 0.1;
         let link_weight_range = 1.0;
         let mut reproduction = Reproduction {
             mating_method_weights: MatingMethodWeights {
-                mutate_add_node: 1,
+                mutate_add_node: 2,
                 mutate_drop_node: 1,
-                mutate_modify_node: 1,
-                mutate_connect: 20,
-                mutate_disconnect: 20,
-                mutate_symmetric_join: 10,
-                mutate_symmetric_fork: 10,
+                mutate_modify_node: 0,
+                mutate_connect: 2,
+                mutate_disconnect: 2,
+                mutate_symmetric_join: 2,
+                mutate_symmetric_fork: 2,
                 mutate_symmetric_connect: 1,
                 mutate_weights: 100,
                 crossover_weights: 0,
