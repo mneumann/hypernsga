@@ -430,7 +430,8 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
         // Input layer
         {
             let z = 0.75;
-            for (x, y) in placement::SunflowerSeed2d::new(node_count.inputs, 0.0) {
+            let y = 0.0;
+            for x in DistributeInterval::new(node_count.inputs, -1.0, 1.0) {
                 substrate.add_node(Position3d::new(x, y, z),
                 Neuron::Input,
                 NodeConnectivity::Out);
@@ -440,7 +441,8 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
         // Hidden
         {
             let z = 0.25;
-            for (x, y) in placement::SunflowerSeed2d::new(node_count.hidden, 0.0) {
+            let y = 0.0;
+            for x in DistributeInterval::new(node_count.hidden, -1.0, 1.0) {
                 substrate.add_node(Position3d::new(x, y, z),
                 Neuron::Hidden,
                 NodeConnectivity::InOut);
@@ -450,7 +452,8 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
         // Outputs
         {
             let z = -0.5;
-            for (x, y) in placement::SunflowerSeed2d::new(node_count.outputs, 0.0) {
+            let y = 0.0;
+            for x in DistributeInterval::new(node_count.outputs, -1.0, 1.0) {
                 substrate.add_node(Position3d::new(x, y, z),
                 Neuron::Output,
                 NodeConnectivity::In);
