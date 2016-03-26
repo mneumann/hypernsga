@@ -6,7 +6,7 @@ dependencies = [
  "asexp 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "closed01 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "conrod 0.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "cppn 0.0.1 (git+https://github.com/mneumann/cppn-rs)",
+ "cppn 0.0.1",
  "criterion-stats 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "glium 0.13.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "graph-io-gml 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -170,7 +170,6 @@ dependencies = [
 [[package]]
 name = "cppn"
 version = "0.0.1"
-source = "git+https://github.com/mneumann/cppn-rs#65075135c6c07cffa45671e61c9b2d4168d69128"
 dependencies = [
  "acyclic-network 0.0.1 (git+https://github.com/mneumann/acyclic-network-rs)",
  "fixedbitset 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",

@@ -51,7 +51,7 @@ const CLEAR_COLOR: (f32, f32, f32, f32) = (1.0, 1.0, 1.0, 1.0);
 #[derive(Copy, Clone)]
 struct Vertex {
     position: [f32; 3],
-    color: [f32; 3],
+    color: [f32; 4],
 }
 
 implement_vertex!(Vertex, position, color);
@@ -76,9 +76,9 @@ impl NetworkBuilder for VizNetworkBuilder {
     fn add_node(&mut self, node: &Node<Self::POS, Self::NT>, _param: f64) {
         assert!(node.index == self.point_list.len());
         let color = match node.node_info {
-            Neuron::Input => [0.0, 1.0, 0.0],
-            Neuron::Hidden => [0.0, 0.0, 0.0],
-            Neuron::Output => [1.0, 0.0, 0.0],
+            Neuron::Input => [0.0, 1.0, 0.0, 1.0],
+            Neuron::Hidden => [0.0, 0.0, 0.0, 1.0],
+            Neuron::Output => [1.0, 0.0, 0.0, 1.0],
         };
         self.point_list.push(Vertex {
             position: [node.position.x() as f32,
@@ -268,6 +268,8 @@ fn render_graph(display: &GlutinFacade, target: &mut glium::Frame, genome: &G, e
     let draw_parameters_substrate = glium::draw_parameters::DrawParameters {
         line_width: Some(1.0),
         point_size: Some(10.0),
+        //blend: glium::Blend::alpha_blending(),
+        //smooth: Some(glium::draw_parameters::Smooth::Nicest),
         viewport: Some(viewport),
         .. Default::default()
     };
@@ -286,10 +288,12 @@ fn render_cppn(display: &GlutinFacade, target: &mut glium::Frame, genome: &G, ex
     let mut dy = DistributeInterval::new(layers.len(), -1.0, 1.0);
 
     let mut cppn_node_positions: Vec<_> = genome.network().nodes().iter().map(|node| {
-        Vertex{position: [0.0, 0.0, 0.0], color: [0.0, 1.0, 0.0]}
+        Vertex{position: [0.0, 0.0, 0.0], color: [0.0, 1.0, 0.0, 1.0]}
     }).collect();
 
     let mut cppn_node_triangles = Vec::new();
+
+    let mut line_vertices = Vec::new();
 
     for layer in layers {
         let y = dy.next().unwrap();
@@ -300,9 +304,45 @@ fn render_cppn(display: &GlutinFacade, target: &mut glium::Frame, genome: &G, ex
             cppn_node_positions[nodeidx].position[0] = x;
             cppn_node_positions[nodeidx].position[1] = y;
 
-            cppn_node_triangles.push(Vertex{position: [x, y+0.01, 0.0], color: [0.0, 1.0, 0.0]});
-            cppn_node_triangles.push(Vertex{position: [x-0.01, y, 0.0], color: [0.0, 1.0, 0.0]});
-            cppn_node_triangles.push(Vertex{position: [x+0.01, y, 0.0], color: [0.0, 1.0, 0.0]});
+            let node = &genome.network().nodes()[nodeidx];
+            let w = 0.03;
+            let aspect = viewport.width as f32 / viewport.height as f32;
+            let h = aspect * w;
+
+            match node.node_type().activation_function {
+                GeometricActivationFunction::Linear => {
+                    cppn_node_triangles.push(Vertex{position: [x-(w/2.0), y,   0.0], color:   [0.0, 0.0, 1.0, 1.0]});
+                    cppn_node_triangles.push(Vertex{position: [x+(w/2.0), y, 0.0], color:   [0.0, 0.0, 1.0, 1.0]});
+                    cppn_node_triangles.push(Vertex{position: [x+(w/2.0), y+h, 0.0], color:   [0.0, 0.0, 1.0, 1.0]});
+                }
+                GeometricActivationFunction::BipolarSigmoid => {
+                    cppn_node_triangles.push(Vertex{position: [x-(w/2.0), y,   0.0], color:   [0.0, 0.0, 1.0, 1.0]});
+                    cppn_node_triangles.push(Vertex{position: [x+(w/2.0), y, 0.0], color:   [0.0, 0.0, 1.0, 1.0]});
+                    cppn_node_triangles.push(Vertex{position: [x+(w/2.0), y+h, 0.0], color:   [1.0, 0.0, 1.0, 1.0]});
+                }
+                GeometricActivationFunction::BipolarGaussian => {
+                    cppn_node_triangles.push(Vertex{position: [x-(w/2.0), y,   0.0], color:   [0.0, 0.0, 1.0, 1.0]});
+                    cppn_node_triangles.push(Vertex{position: [x+(w/2.0), y, 0.0], color:   [0.0, 0.0, 1.0, 1.0]});
+                    cppn_node_triangles.push(Vertex{position: [x, y+h, 0.0], color:   [1.0, 0.0, 1.0, 1.0]});
+                }
+                GeometricActivationFunction::Sine => {
+                    cppn_node_triangles.push(Vertex{position: [x, y,   0.0], color:   [1.0, 0.0, 1.0, 1.0]});
+                    cppn_node_triangles.push(Vertex{position: [x-(w/2.0), y+h, 0.0], color:   [1.0, 0.0, 1.0, 1.0]});
+                    cppn_node_triangles.push(Vertex{position: [x+(w/2.0), y+h, 0.0], color:   [1.0, 0.0, 1.0, 1.0]});
+                }
+                _ => {
+                    cppn_node_triangles.push(Vertex{position: [x-(w/2.0), y, 0.0], color:   [1.0, 0.0, 0.0, 1.0]});
+                    cppn_node_triangles.push(Vertex{position: [x-(w/2.0), y+h, 0.0], color:   [1.0, 0.0, 0.0, 1.0]});
+                    cppn_node_triangles.push(Vertex{position: [x+(w/2.0),   y, 0.0], color:   [1.0, 0.0, 0.0, 1.0]});
+
+                    /*
+                    cppn_node_triangles.push(Vertex{position: [x-(w/2.0), y+h, 0.0], color:   [0.0, 0.0, 1.0, 1.0]});
+                    cppn_node_triangles.push(Vertex{position: [x+(w/2.0), y+h, 0.0], color:   [0.0, 0.0, 1.0, 1.0]});
+                    cppn_node_triangles.push(Vertex{position: [x+(w/2.0),   y, 0.0], color:   [0.0, 0.0, 1.0, 1.0]});
+                    */
+                }
+            }
+
         }
     }
 
@@ -318,27 +358,18 @@ fn render_cppn(display: &GlutinFacade, target: &mut glium::Frame, genome: &G, ex
         let dst_x = cppn_node_positions[dst].position[0];
         let dst_y = cppn_node_positions[dst].position[1];
 
-        let weight = link_ref.link().weight().0;
+        let weight = link_ref.link().weight().0 as f32;
+        assert!(weight.abs() <= 1.0); // XXX
+        let wa = (weight.abs()/2.0)+0.5;
         let color =
-        if weight  >= 0.0 {
-            [0.0, 0.0, 0.0]
-        } else {
-            [1.0, 0.0, 0.0]
+            if weight >= 0.0 {
+                [0.0, 1.0, 0.0, wa]
+            } else {
+                [1.0, 0.0, 0.0, wa]
         };
 
-        // line width
-        let lw = 0.01 * weight.abs() as f32;
-
-        cppn_node_triangles.push(Vertex{position: [src_x-lw, src_y, 0.0], color: color});
-        cppn_node_triangles.push(Vertex{position: [src_x+lw, src_y, 0.0], color: color});
-        cppn_node_triangles.push(Vertex{position: [dst_x, dst_y, 0.0], color: color});
-
-        /*
-        cppn_node_triangles.push(Vertex{position: [dst_x-lw, dst_y, 0.0], color: color});
-        cppn_node_triangles.push(Vertex{position: [dst_x+lw, dst_y, 0.0], color: color});
-        cppn_node_triangles.push(Vertex{position: [src_x, src_y, 0.0], color: color});
-        */
-
+        line_vertices.push(Vertex{position: [src_x, src_y, 0.0], color: color});
+        line_vertices.push(Vertex{position: [dst_x, dst_y, 0.0], color: color});
     });
 
     let vertex_buffer_cppn = glium::VertexBuffer::new(display, &cppn_node_positions).unwrap();
@@ -356,11 +387,8 @@ fn render_cppn(display: &GlutinFacade, target: &mut glium::Frame, genome: &G, ex
     };
 
     let draw_parameters2 = glium::draw_parameters::DrawParameters {
-        //line_width: Some(1.0),
-        //point_size: Some(1.0),
+        line_width: Some(3.0),
         blend: glium::Blend::alpha_blending(),
-        //multisampling: true,
-        //dithering: true,
         smooth: Some(glium::draw_parameters::Smooth::Nicest),
         viewport: Some(viewport),
         .. Default::default()
@@ -369,6 +397,8 @@ fn render_cppn(display: &GlutinFacade, target: &mut glium::Frame, genome: &G, ex
     //target.draw(&vertex_buffer_cppn, &glium::index::NoIndices(PrimitiveType::Points), program, &uniforms_cppn, &draw_parameters2).unwrap();
     //target.draw(&vertex_buffer_cppn, &cppn_index_buffer, program, &uniforms_cppn, &draw_parameters2).unwrap();
 
+    let lines_buffer = glium::VertexBuffer::new(display, &line_vertices).unwrap();
+    target.draw(&lines_buffer, &glium::index::NoIndices(PrimitiveType::LinesList), program, &uniforms_cppn, &draw_parameters2).unwrap();
     target.draw(&triangle_buffer, &glium::index::NoIndices(PrimitiveType::TrianglesList), program, &uniforms_cppn, &draw_parameters2).unwrap();
 }
 
@@ -649,11 +679,11 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
             },
             activation_functions: vec![
                 GeometricActivationFunction::Linear,
-                GeometricActivationFunction::Gaussian,
+                //GeometricActivationFunction::Gaussian,
                 GeometricActivationFunction::BipolarGaussian,
                 GeometricActivationFunction::BipolarSigmoid,
                 GeometricActivationFunction::Sine,
-                GeometricActivationFunction::Absolute,
+                //GeometricActivationFunction::Absolute,
             ],
             mutate_element_prob: Prob::new(0.05),
             weight_perturbance: WeightPerturbanceMethod::JiggleGaussian {
@@ -789,8 +819,8 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                     uniform mat4 matrix;
                     uniform mat4 perspective;
                     in vec3 position;
-                    in vec3 color;
-                    out vec3 fl_color;
+                    in vec4 color;
+                    out vec4 fl_color;
                     void main() {
                         gl_Position = perspective * matrix * vec4(position, 1.0);
                         fl_color = color;
@@ -799,10 +829,10 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
 
                 fragment: "
                     #version 140
-                    in vec3 fl_color;
+                    in vec4 fl_color;
                     out vec4 color;
                     void main() {
-                        color = vec4(fl_color, 1.0);
+                        color = fl_color;
                     }
                 "
                                                           },
@@ -816,8 +846,8 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                     #version 140
                     uniform mat4 matrix;
                     in vec3 position;
-                    in vec3 color;
-                    out vec3 fl_color;
+                    in vec4 color;
+                    out vec4 fl_color;
                     void main() {
                         gl_Position = matrix * vec4(position, 1.0);
                         fl_color = color;
@@ -826,10 +856,10 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
 
                 fragment: "
                     #version 140
-                    in vec3 fl_color;
+                    in vec4 fl_color;
                     out vec4 color;
                     void main() {
-                        color = vec4(fl_color, 1.0);
+                        color = fl_color;
                     }
                 "
                                                        },
