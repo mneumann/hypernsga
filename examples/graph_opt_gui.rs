@@ -16,13 +16,13 @@ use hypernsga::graph;
 use hypernsga::domain_graph::{Neuron, NeuronNetworkBuilder, GraphSimilarity};
 use hypernsga::network_builder::NetworkBuilder;
 use hypernsga::cppn::{Cppn, GeometricActivationFunction, RandomGenomeCreator, Reproduction,
-                      Expression, G, PopulationFitness};
+Expression, G, PopulationFitness};
 use hypernsga::fitness::{Fitness, DomainFitness};
 use hypernsga::mating::MatingMethodWeights;
 use hypernsga::prob::Prob;
 use hypernsga::weight::{WeightPerturbanceMethod, WeightRange};
 use hypernsga::substrate::{Node, Substrate, SubstrateConfiguration, Position, Position3d,
-                           Position2d, NodeConnectivity};
+Position2d, NodeConnectivity};
 use hypernsga::placement;
 use hypernsga::distribute::DistributeInterval;
 use nsga2::selection::{SelectNSGP,SelectNSGPMod};
@@ -40,6 +40,8 @@ use imgui_sys::igPlotLines2;
 use libc::*;
 use glium::Surface;
 use glium::index::PrimitiveType;
+use std::io::Write;
+use std::fs::File;
 
 mod support;
 
@@ -79,8 +81,8 @@ impl NetworkBuilder for VizNetworkBuilder {
         };
         self.point_list.push(Vertex {
             position: [node.position.x() as f32,
-                       node.position.y() as f32,
-                       node.position.z() as f32],
+            node.position.y() as f32,
+            node.position.z() as f32],
             color: color,
         });
     }
@@ -95,6 +97,57 @@ impl NetworkBuilder for VizNetworkBuilder {
 
         self.link_index_list.push(source_node.index as u32);
         self.link_index_list.push(target_node.index as u32);
+    }
+
+    fn network(self) -> Self::Output {
+        ()
+    }
+}
+
+pub struct GMLNetworkBuilder<'a, W: Write+'a> {
+    wr: Option<&'a mut W>
+}
+
+impl<'a, W:Write> GMLNetworkBuilder<'a, W> {
+    fn set_writer(&mut self, wr: &'a mut W) {
+        self.wr = Some(wr);
+    }
+    fn begin(&mut self) {
+        let wr = self.wr.as_mut().unwrap();
+        writeln!(wr, "graph [").unwrap();
+        writeln!(wr, "directed 1").unwrap();
+    }
+    fn end(&mut self) {
+        let wr = self.wr.as_mut().unwrap();
+        writeln!(wr, "]").unwrap();
+    }
+}
+
+impl<'a, W:Write> NetworkBuilder for GMLNetworkBuilder<'a, W> {
+    type POS = Position3d;
+    type NT = Neuron;
+    type Output = ();
+
+    fn new() -> Self {
+        GMLNetworkBuilder {
+            wr: None
+        }
+    }
+
+    fn add_node(&mut self, node: &Node<Self::POS, Self::NT>, _param: f64) {
+        let wr = self.wr.as_mut().unwrap();
+        writeln!(wr, "  node [id {} weight {:.1}]", node.index, 0.0).unwrap();
+    }
+
+    fn add_link(&mut self,
+                source_node: &Node<Self::POS, Self::NT>,
+                target_node: &Node<Self::POS, Self::NT>,
+                weight1: f64,
+                _weight2: f64) {
+        let wr = self.wr.as_mut().unwrap();
+        let w = weight1.abs();
+        debug_assert!(w <= 1.0);
+        writeln!(wr, "  edge [source {} target {} weight {:.1}]", source_node.index, target_node.index, w).unwrap();
     }
 
     fn network(self) -> Self::Output {
@@ -144,6 +197,8 @@ struct State {
     objectives_use_behavioral: bool,
     objectives_use_cct: bool,
     objectives_use_age: bool,
+
+    action: Action,
 }
 
 struct EvoConfig {
@@ -151,6 +206,12 @@ struct EvoConfig {
     lambda: usize,
     k: usize,
     objectives: Vec<usize>,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Action {
+    None,
+    ExportBest
 }
 
 extern "C" fn values_getter(data: *mut c_void, idx: c_int) -> c_float {
@@ -162,432 +223,437 @@ extern "C" fn values_getter(data: *mut c_void, idx: c_int) -> c_float {
 
 fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitness>) {
     ui.window(im_str!("Evolutionary Graph Optimization"))
-      .size((300.0, 100.0), ImGuiSetCond_FirstUseEver)
-      .build(|| {
-          // if ui.collapsing_header(im_str!("General")).build() {
-          ui.text(im_str!("Iteration: {}", state.iteration));
-          ui.text(im_str!("Best Fitness: {:.3}", state.best_fitness));
-          ui.separator();
-          if state.running {
-              if ui.small_button(im_str!("STOP")) {
-                  state.running = false;
-              }
-          } else {
-              if ui.small_button(im_str!("START")) {
-                  state.running = true;
-              }
-          }
-          if ui.small_button(im_str!("Recalc Fitness")) {
-              state.recalc_fitness = true;
-          }
-
-          if ui.collapsing_header(im_str!("Population Metrics")).build() {
-            let best_domain = population.individuals().iter().max_by_key(|ind| (ind.fitness().domain_fitness * 1_000_000.0) as usize).unwrap();
-            let worst_domain = population.individuals().iter().min_by_key(|ind| (ind.fitness().domain_fitness * 1_000_000.0) as usize).unwrap();
-            ui.text(im_str!("Best Domain Fitness: {:.3}", best_domain.fitness().domain_fitness));
-            ui.text(im_str!("Age of Best: {}", best_domain.genome().age(state.iteration)));
-
-            ui.text(im_str!("Worst Domain Fitness: {:.3}", worst_domain.fitness().domain_fitness));
-            ui.text(im_str!("Age of Worst: {}", worst_domain.genome().age(state.iteration)));
-          }
-
-          if ui.collapsing_header(im_str!("History")).build() {
-              let num_points = state.best_fitness_history.len();
-              unsafe {
-                  igPlotLines2(im_str!("performance").as_ptr(),
-                               values_getter,
-                               (state as *mut State) as *mut c_void,
-                               num_points as c_int,
-                               0 as c_int,
-                               im_str!("Domain Fitness").as_ptr(),
-                               0.0 as c_float,
-                               1.0 as c_float,
-                               ImVec2::new(400.0, 50.0));
-              }
-          }
-          if ui.collapsing_header(im_str!("Objectives")).build() {
-              ui.checkbox(im_str!("Behavioral Diversity"), &mut state.objectives_use_behavioral);
-              ui.checkbox(im_str!("Connection Cost"), &mut state.objectives_use_cct);
-              ui.checkbox(im_str!("Age Diversity"), &mut state.objectives_use_age);
-          }
-          if ui.collapsing_header(im_str!("Population Settings")).build() {
-              ui.slider_i32(im_str!("Population Size"), &mut state.mu, state.k, 1000).build();
-              ui.slider_i32(im_str!("Offspring Size"), &mut state.lambda, 1, 1000).build();
-          }
-
-          if ui.collapsing_header(im_str!("Selection")).build() {
-              ui.slider_i32(im_str!("Tournament Size"), &mut state.k, 1, state.mu).build();
-              ui.slider_f32(im_str!("NSGP Objective Epsilon"),
-                            &mut state.nsgp_objective_eps,
-                            0.0,
-                            1.0)
-                .build();
-          }
-
-          if ui.collapsing_header(im_str!("View")).build() {
-              ui.slider_f32(im_str!("Rotate Substrate x"),
-                            &mut state.rotate_substrate_x,
-                            0.0,
-                            360.0)
-                .build();
-              ui.slider_f32(im_str!("Rotate Substrate y"),
-                            &mut state.rotate_substrate_y,
-                            0.0,
-                            360.0)
-                .build();
-              ui.slider_f32(im_str!("Rotate Substrate z"),
-                            &mut state.rotate_substrate_z,
-                            0.0,
-                            360.0)
-                .build();
-              ui.slider_f32(im_str!("Scale Substrate x"),
-                            &mut state.scale_substrate_x,
-                            0.0,
-                            1.0)
-                .build();
-              ui.slider_f32(im_str!("Scale Substrate y"),
-                            &mut state.scale_substrate_y,
-                            0.0,
-                            1.0)
-                .build();
-              ui.slider_f32(im_str!("Scale Substrate z"),
-                            &mut state.scale_substrate_z,
-                            0.0,
-                            1.0)
-                .build();
-          }
-
-          if ui.collapsing_header(im_str!("CPPN")).build() {
-              ui.slider_f32(im_str!("Link Expression Min"),
-                            &mut state.link_expression_min,
-                            -1.0,
-                            1.0)
-                .build();
-              ui.slider_f32(im_str!("Link Expression Max"),
-                            &mut state.link_expression_max,
-                            -1.0,
-                            1.0)
-                .build();
-
-              ui.slider_f32(im_str!("Link Weight Range (bipolar)"),
-                            &mut state.link_weight_range,
-                            0.1,
-                            5.0)
-                .build();
-              ui.slider_f32(im_str!("Link Weight Creation Sigma"),
-                            &mut state.link_weight_creation_sigma,
-                            0.01,
-                            1.0)
-                .build();
-              ui.slider_f32(im_str!("Weight Perturbance Sigma"),
-                            &mut state.weight_perturbance_sigma,
-                            0.0,
-                            1.0)
-                .build();
-          }
-
-          if ui.collapsing_header(im_str!("Neighbor Matching")).build() {
-              ui.checkbox(im_str!("Edge Weight Scoring"), &mut state.nm_edge_score);
-              ui.slider_i32(im_str!("Iterations"), &mut state.nm_iters, 1, 1000).build();
-              ui.slider_f32(im_str!("Eps"), &mut state.nm_eps, 0.0, 1.0).build();
-          }
-
-          if ui.collapsing_header(im_str!("Mutation")).build() {
-              ui.slider_f32(im_str!("Mutation Rate"),
-                            &mut state.mutate_element_prob,
-                            0.0,
-                            1.0)
-                .build();
-              ui.slider_i32(im_str!("Weights"), &mut state.mutate_weights, 1, 100).build();
-              ui.slider_i32(im_str!("Add Node"), &mut state.mutate_add_node, 0, 100).build();
-              ui.slider_i32(im_str!("Drop Node"), &mut state.mutate_drop_node, 0, 100).build();
-              ui.slider_i32(im_str!("Modify Node"),
-                            &mut state.mutate_modify_node,
-                            0,
-                            100)
-                .build();
-              ui.slider_i32(im_str!("Connect"), &mut state.mutate_connect, 0, 100).build();
-              ui.slider_i32(im_str!("Disconnect"), &mut state.mutate_disconnect, 0, 100).build();
-          }
-
-          // ui.separator();
-          // let mouse_pos = ui.imgui().mouse_pos();
-          // ui.text(im_str!("Mouse Position: ({:.1},{:.1})", mouse_pos.0, mouse_pos.1));
-      })
-}
-
-
-
-fn fitness<P>(genome: &G,
-              expression: &Expression,
-              substrate_config: &SubstrateConfiguration<P, Neuron>,
-              fitness_eval: &GraphSimilarity)
-              -> Fitness
-    where P: Position
-{
-
-    let mut network_builder = NeuronNetworkBuilder::new();
-    let (behavior, connection_cost) = expression.express(genome,
-                                                         &mut network_builder,
-                                                         substrate_config);
-
-    // Evaluate domain specific fitness
-    let domain_fitness = fitness_eval.fitness(network_builder.network());
-
-    Fitness {
-        domain_fitness: domain_fitness,
-        behavioral_diversity: 0.0, // will be calculated in `population_metric`
-        connection_cost: connection_cost,
-        behavior: behavior,
-        age_diversity: 0.0,  // will be calculated in `population_metric`
-    }
-}
-
-fn main() {
-    let mut support = Support::init();
-
-    let mut rng = rand::thread_rng();
-    let graph_file = env::args().nth(1).unwrap();
-    println!("graph: {}", graph_file);
-
-    let mut domain_fitness_eval = GraphSimilarity {
-        target_graph: graph::load_graph_normalized(&graph_file),
-        edge_score: false,
-        iters: 50,
-        eps: 0.01,
-    };
-
-    // XXX
-    let mut substrate: Substrate<Position3d, Neuron> = Substrate::new();
-    let node_count = domain_fitness_eval.target_graph_node_count();
-
-    println!("{:?}", node_count);
-
-    // Input layer
-    {
-        let z = 0.75;
-        for (x, y) in placement::SunflowerSeed2d::new(node_count.inputs, 0.0) {
-            substrate.add_node(Position3d::new(x, y, z),
-                               Neuron::Input,
-                               NodeConnectivity::Out);
-        }
-    }
-
-    // Hidden
-    {
-        let z = 0.25;
-        for (x, y) in placement::SunflowerSeed2d::new(node_count.hidden, 0.0) {
-            substrate.add_node(Position3d::new(x, y, z),
-                               Neuron::Hidden,
-                               NodeConnectivity::InOut);
-        }
-    }
-
-    // Outputs
-    {
-        let z = -0.5;
-        for (x, y) in placement::SunflowerSeed2d::new(node_count.outputs, 0.0) {
-            substrate.add_node(Position3d::new(x, y, z),
-                               Neuron::Output,
-                               NodeConnectivity::In);
-        }
-    }
-
-    let mut evo_config = EvoConfig {
-        mu: 100,
-        lambda: 200,
-        k: 2,
-        objectives: vec![0,1,2,3],
-    };
-
-    let mut selection = SelectNSGPMod { objective_eps: 0.01 };
-
-    let weight_perturbance_sigma = 0.1;
-    let link_weight_range = 1.0;
-    let mut reproduction = Reproduction {
-        mating_method_weights: MatingMethodWeights {
-            mutate_add_node: 1,
-            mutate_drop_node: 1,
-            mutate_modify_node: 1,
-            mutate_connect: 20,
-            mutate_disconnect: 20,
-            mutate_weights: 100,
-            crossover_weights: 0,
-        },
-        activation_functions: vec![
-            GeometricActivationFunction::Linear,
-            GeometricActivationFunction::Gaussian,
-            GeometricActivationFunction::BipolarGaussian,
-            GeometricActivationFunction::BipolarSigmoid,
-            GeometricActivationFunction::Sine,
-            GeometricActivationFunction::Absolute,
-        ],
-        mutate_element_prob: Prob::new(0.05),
-        weight_perturbance: WeightPerturbanceMethod::JiggleGaussian {
-            sigma: weight_perturbance_sigma,
-        },
-        link_weight_range: WeightRange::bipolar(link_weight_range),
-        link_weight_creation_sigma: 0.1,
-
-        mutate_add_node_random_link_weight: true,
-        mutate_drop_node_tournament_k: 10,
-        mutate_modify_node_tournament_k: 2,
-        mate_retries: 100,
-    };
-
-    let random_genome_creator = RandomGenomeCreator {
-        link_weight_range: WeightRange::bipolar(link_weight_range),
-
-        start_activation_functions: vec![
-            //GeometricActivationFunction::Linear,
-            GeometricActivationFunction::BipolarGaussian,
-            GeometricActivationFunction::BipolarSigmoid,
-            GeometricActivationFunction::Sine,
-        ],
-        start_connected: false,
-        start_link_weight_range: WeightRange::bipolar(0.1),
-        start_symmetry: vec![], // Some(3.0), None, Some(3.0)],
-        start_initial_nodes: 0,
-    };
-
-    let mut expression = Expression { link_expression_range: (0.1, 0.5) };
-
-    let substrate_config = substrate.to_configuration();
-
-    // create `generation 0`
-    let mut parents = {
-        let mut initial = UnratedPopulation::new();
-        for _ in 0..evo_config.mu {
-            initial.push(random_genome_creator.create::<_, Position3d>(0, &mut rng));
-        }
-        let mut rated = initial.rate_in_parallel(&|ind| {
-                                                     fitness(ind,
-                                                             &expression,
-                                                             &substrate_config,
-                                                             &domain_fitness_eval)
-                                                 },
-                                                 INFINITY);
-
-        PopulationFitness.apply(0, &mut rated);
-
-        rated.select(evo_config.mu,
-                     &evo_config.objectives,
-                     &selection,
-                     &mut rng)
-    };
-
-
-    let mut best_individual_i = 0;
-    let mut best_fitness = parents.individuals()[best_individual_i].fitness().domain_fitness;
-    for (i, ind) in parents.individuals().iter().enumerate() {
-        let fitness = ind.fitness().domain_fitness;
-        if fitness > best_fitness {
-            best_fitness = fitness;
-            best_individual_i = i;
-        }
-    }
-
-    let mut state = State {
-        running: true,
-        recalc_fitness: false,
-        // recalc_substrate
-        iteration: 0,
-        best_fitness: best_fitness,
-        mu: evo_config.mu as i32,
-        lambda: evo_config.lambda as i32,
-        k: evo_config.k as i32,
-
-        mutate_add_node: reproduction.mating_method_weights.mutate_add_node as i32,
-        mutate_drop_node: reproduction.mating_method_weights.mutate_drop_node as i32,
-        mutate_modify_node: reproduction.mating_method_weights.mutate_modify_node as i32,
-        mutate_connect: reproduction.mating_method_weights.mutate_connect as i32,
-        mutate_disconnect: reproduction.mating_method_weights.mutate_disconnect as i32,
-        mutate_weights: reproduction.mating_method_weights.mutate_weights as i32,
-
-        best_fitness_history: vec![(0, best_fitness)],
-
-        nm_edge_score: domain_fitness_eval.edge_score,
-        nm_iters: domain_fitness_eval.iters as i32,
-        nm_eps: domain_fitness_eval.eps,
-
-        mutate_element_prob: reproduction.mutate_element_prob.get(),
-        nsgp_objective_eps: selection.objective_eps as f32,
-        weight_perturbance_sigma: weight_perturbance_sigma as f32,
-        link_weight_range: link_weight_range as f32,
-        link_weight_creation_sigma: reproduction.link_weight_creation_sigma as f32,
-
-        rotate_substrate_x: 45.0,
-        rotate_substrate_y: 0.0,
-        rotate_substrate_z: 0.0,
-        scale_substrate_x: 0.5,
-        scale_substrate_y: 0.5,
-        scale_substrate_z: 0.5,
-
-        link_expression_min: expression.link_expression_range.0 as f32,
-        link_expression_max: expression.link_expression_range.1 as f32,
-
-
-        objectives_use_behavioral: true,
-        objectives_use_cct: true,
-        objectives_use_age: true,
-    };
-
-    let mut program_substrate: Option<glium::Program> = None;
-    let mut program_vertex: Option<glium::Program> = None;
-
-    loop {
-        {
-            support.render(CLEAR_COLOR, |display, imgui, renderer, target, delta_f| {
-                let best_ind = &parents.individuals()[best_individual_i];
-
-                let mut network_builder = VizNetworkBuilder::new();
-                let (_, _) = expression.express(&best_ind.genome(),
-                &mut network_builder,
-                &substrate_config);
-
-                let vertex_buffer = {
-                    glium::VertexBuffer::new(display, &network_builder.point_list).unwrap()
-                };
-
-                let point_index_buffer = glium::index::NoIndices(PrimitiveType::Points);
-                let line_index_buffer  = glium::IndexBuffer::new(display, PrimitiveType::LinesList,
-                                                                 &network_builder.link_index_list).unwrap();
-
-
-                // Layout the CPPN
-                let cppn = Cppn::new(best_ind.genome().network());
-                let layers = cppn.group_layers();
-                let mut dy = DistributeInterval::new(layers.len(), -1.0, 1.0);
-
-                let mut cppn_node_positions: Vec<_> = best_ind.genome().network().nodes().iter().map(|node| {
-                    Vertex{position: [0.0, 0.0, 0.0], color: [0.0, 1.0, 0.0]}
-                }).collect();
-
-                for layer in layers {
-                    let y = dy.next().unwrap();
-                    let mut dx = DistributeInterval::new(layer.len(), -1.0, 1.0);
-                    for nodeidx in layer {
-                        let x = dx.next().unwrap();
-                        cppn_node_positions[nodeidx].position[0] = x as f32;
-                        cppn_node_positions[nodeidx].position[1] = -y as f32;
-                    }
+        .size((300.0, 100.0), ImGuiSetCond_FirstUseEver)
+        .build(|| {
+            // if ui.collapsing_header(im_str!("General")).build() {
+            ui.text(im_str!("Iteration: {}", state.iteration));
+            ui.text(im_str!("Best Fitness: {:.3}", state.best_fitness));
+            ui.separator();
+            if state.running {
+                if ui.small_button(im_str!("STOP")) {
+                    state.running = false;
                 }
+            } else {
+                if ui.small_button(im_str!("START")) {
+                    state.running = true;
+                }
+            }
+            if ui.small_button(im_str!("Recalc Fitness")) {
+                state.recalc_fitness = true;
+            }
+            if ui.small_button(im_str!("Export Best")) {
+                state.action = Action::ExportBest;
+            }
 
-                let mut cppn_links = Vec::new();
-                best_ind.genome().network().each_link_ref(|link_ref| {
-                    let src = link_ref.link().source_node_index().index();
-                    let dst = link_ref.link().target_node_index().index();
-                    cppn_links.push(src as u32);
-                    cppn_links.push(dst as u32);
-                });
+            if ui.collapsing_header(im_str!("Population Metrics")).build() {
+                let best_domain = population.individuals().iter().max_by_key(|ind| (ind.fitness().domain_fitness * 1_000_000.0) as usize).unwrap();
+                let worst_domain = population.individuals().iter().min_by_key(|ind| (ind.fitness().domain_fitness * 1_000_000.0) as usize).unwrap();
+                ui.text(im_str!("Best Domain Fitness: {:.3}", best_domain.fitness().domain_fitness));
+                ui.text(im_str!("Age of Best: {}", best_domain.genome().age(state.iteration)));
 
-                let vertex_buffer_cppn = glium::VertexBuffer::new(display, &cppn_node_positions).unwrap();
-                let cppn_index_buffer = glium::IndexBuffer::new(display, PrimitiveType::LinesList, &cppn_links).unwrap();
+                ui.text(im_str!("Worst Domain Fitness: {:.3}", worst_domain.fitness().domain_fitness));
+                ui.text(im_str!("Age of Worst: {}", worst_domain.genome().age(state.iteration)));
+            }
 
-                if program_substrate.is_none() {
-                    program_substrate = Some(program!(display,
-                                            140 => {
-                                                vertex: "
+            if ui.collapsing_header(im_str!("History")).build() {
+                let num_points = state.best_fitness_history.len();
+                unsafe {
+                    igPlotLines2(im_str!("performance").as_ptr(),
+                    values_getter,
+                    (state as *mut State) as *mut c_void,
+                    num_points as c_int,
+                    0 as c_int,
+                    im_str!("Domain Fitness").as_ptr(),
+                    0.0 as c_float,
+                    1.0 as c_float,
+                    ImVec2::new(400.0, 50.0));
+                }
+            }
+            if ui.collapsing_header(im_str!("Objectives")).build() {
+                ui.checkbox(im_str!("Behavioral Diversity"), &mut state.objectives_use_behavioral);
+                ui.checkbox(im_str!("Connection Cost"), &mut state.objectives_use_cct);
+                ui.checkbox(im_str!("Age Diversity"), &mut state.objectives_use_age);
+            }
+            if ui.collapsing_header(im_str!("Population Settings")).build() {
+                ui.slider_i32(im_str!("Population Size"), &mut state.mu, state.k, 1000).build();
+                ui.slider_i32(im_str!("Offspring Size"), &mut state.lambda, 1, 1000).build();
+            }
+
+            if ui.collapsing_header(im_str!("Selection")).build() {
+                ui.slider_i32(im_str!("Tournament Size"), &mut state.k, 1, state.mu).build();
+                ui.slider_f32(im_str!("NSGP Objective Epsilon"),
+                &mut state.nsgp_objective_eps,
+                0.0,
+                1.0)
+                    .build();
+            }
+
+            if ui.collapsing_header(im_str!("View")).build() {
+                ui.slider_f32(im_str!("Rotate Substrate x"),
+                &mut state.rotate_substrate_x,
+                0.0,
+                360.0)
+                    .build();
+                ui.slider_f32(im_str!("Rotate Substrate y"),
+                &mut state.rotate_substrate_y,
+                0.0,
+                360.0)
+                    .build();
+                ui.slider_f32(im_str!("Rotate Substrate z"),
+                &mut state.rotate_substrate_z,
+                0.0,
+                360.0)
+                    .build();
+                ui.slider_f32(im_str!("Scale Substrate x"),
+                &mut state.scale_substrate_x,
+                0.0,
+                1.0)
+                    .build();
+                ui.slider_f32(im_str!("Scale Substrate y"),
+                &mut state.scale_substrate_y,
+                0.0,
+                1.0)
+                    .build();
+                ui.slider_f32(im_str!("Scale Substrate z"),
+                &mut state.scale_substrate_z,
+                0.0,
+                1.0)
+                    .build();
+            }
+
+            if ui.collapsing_header(im_str!("CPPN")).build() {
+                ui.slider_f32(im_str!("Link Expression Min"),
+                &mut state.link_expression_min,
+                -1.0,
+                1.0)
+                    .build();
+                ui.slider_f32(im_str!("Link Expression Max"),
+                &mut state.link_expression_max,
+                -1.0,
+                1.0)
+                    .build();
+
+                ui.slider_f32(im_str!("Link Weight Range (bipolar)"),
+                &mut state.link_weight_range,
+                0.1,
+                5.0)
+                    .build();
+                ui.slider_f32(im_str!("Link Weight Creation Sigma"),
+                &mut state.link_weight_creation_sigma,
+                0.01,
+                1.0)
+                    .build();
+                ui.slider_f32(im_str!("Weight Perturbance Sigma"),
+                &mut state.weight_perturbance_sigma,
+                0.0,
+                1.0)
+                    .build();
+            }
+
+            if ui.collapsing_header(im_str!("Neighbor Matching")).build() {
+                ui.checkbox(im_str!("Edge Weight Scoring"), &mut state.nm_edge_score);
+                ui.slider_i32(im_str!("Iterations"), &mut state.nm_iters, 1, 1000).build();
+                ui.slider_f32(im_str!("Eps"), &mut state.nm_eps, 0.0, 1.0).build();
+            }
+
+            if ui.collapsing_header(im_str!("Mutation")).build() {
+                ui.slider_f32(im_str!("Mutation Rate"),
+                &mut state.mutate_element_prob,
+                0.0,
+                1.0)
+                    .build();
+                ui.slider_i32(im_str!("Weights"), &mut state.mutate_weights, 1, 100).build();
+                ui.slider_i32(im_str!("Add Node"), &mut state.mutate_add_node, 0, 100).build();
+                ui.slider_i32(im_str!("Drop Node"), &mut state.mutate_drop_node, 0, 100).build();
+                ui.slider_i32(im_str!("Modify Node"),
+                &mut state.mutate_modify_node,
+                0,
+                100)
+                    .build();
+                ui.slider_i32(im_str!("Connect"), &mut state.mutate_connect, 0, 100).build();
+                ui.slider_i32(im_str!("Disconnect"), &mut state.mutate_disconnect, 0, 100).build();
+            }
+
+            // ui.separator();
+            // let mouse_pos = ui.imgui().mouse_pos();
+            // ui.text(im_str!("Mouse Position: ({:.1},{:.1})", mouse_pos.0, mouse_pos.1));
+        })
+        }
+
+
+
+    fn fitness<P>(genome: &G,
+                  expression: &Expression,
+                  substrate_config: &SubstrateConfiguration<P, Neuron>,
+                  fitness_eval: &GraphSimilarity)
+        -> Fitness
+            where P: Position
+            {
+
+                let mut network_builder = NeuronNetworkBuilder::new();
+                let (behavior, connection_cost) = expression.express(genome,
+                                                                     &mut network_builder,
+                                                                     substrate_config);
+
+                // Evaluate domain specific fitness
+                let domain_fitness = fitness_eval.fitness(network_builder.network());
+
+                Fitness {
+                    domain_fitness: domain_fitness,
+                    behavioral_diversity: 0.0, // will be calculated in `population_metric`
+                    connection_cost: connection_cost,
+                    behavior: behavior,
+                    age_diversity: 0.0,  // will be calculated in `population_metric`
+                }
+            }
+
+    fn main() {
+        let mut support = Support::init();
+
+        let mut rng = rand::thread_rng();
+        let graph_file = env::args().nth(1).unwrap();
+        println!("graph: {}", graph_file);
+
+        let mut domain_fitness_eval = GraphSimilarity {
+            target_graph: graph::load_graph_normalized(&graph_file),
+            edge_score: false,
+            iters: 50,
+            eps: 0.01,
+        };
+
+        // XXX
+        let mut substrate: Substrate<Position3d, Neuron> = Substrate::new();
+        let node_count = domain_fitness_eval.target_graph_node_count();
+
+        println!("{:?}", node_count);
+
+        // Input layer
+        {
+            let z = 0.75;
+            for (x, y) in placement::SunflowerSeed2d::new(node_count.inputs, 0.0) {
+                substrate.add_node(Position3d::new(x, y, z),
+                Neuron::Input,
+                NodeConnectivity::Out);
+            }
+        }
+
+        // Hidden
+        {
+            let z = 0.25;
+            for (x, y) in placement::SunflowerSeed2d::new(node_count.hidden, 0.0) {
+                substrate.add_node(Position3d::new(x, y, z),
+                Neuron::Hidden,
+                NodeConnectivity::InOut);
+            }
+        }
+
+        // Outputs
+        {
+            let z = -0.5;
+            for (x, y) in placement::SunflowerSeed2d::new(node_count.outputs, 0.0) {
+                substrate.add_node(Position3d::new(x, y, z),
+                Neuron::Output,
+                NodeConnectivity::In);
+            }
+        }
+
+        let mut evo_config = EvoConfig {
+            mu: 100,
+            lambda: 200,
+            k: 2,
+            objectives: vec![0,1,2,3],
+        };
+
+        let mut selection = SelectNSGPMod { objective_eps: 0.01 };
+
+        let weight_perturbance_sigma = 0.1;
+        let link_weight_range = 1.0;
+        let mut reproduction = Reproduction {
+            mating_method_weights: MatingMethodWeights {
+                mutate_add_node: 1,
+                mutate_drop_node: 1,
+                mutate_modify_node: 1,
+                mutate_connect: 20,
+                mutate_disconnect: 20,
+                mutate_weights: 100,
+                crossover_weights: 0,
+            },
+            activation_functions: vec![
+                GeometricActivationFunction::Linear,
+                GeometricActivationFunction::Gaussian,
+                GeometricActivationFunction::BipolarGaussian,
+                GeometricActivationFunction::BipolarSigmoid,
+                GeometricActivationFunction::Sine,
+                GeometricActivationFunction::Absolute,
+            ],
+            mutate_element_prob: Prob::new(0.05),
+            weight_perturbance: WeightPerturbanceMethod::JiggleGaussian {
+                sigma: weight_perturbance_sigma,
+            },
+            link_weight_range: WeightRange::bipolar(link_weight_range),
+            link_weight_creation_sigma: 0.1,
+
+            mutate_add_node_random_link_weight: true,
+            mutate_drop_node_tournament_k: 2,
+            mutate_modify_node_tournament_k: 2,
+            mate_retries: 100,
+        };
+
+        let random_genome_creator = RandomGenomeCreator {
+            link_weight_range: WeightRange::bipolar(link_weight_range),
+
+            start_activation_functions: vec![
+                //GeometricActivationFunction::Linear,
+                GeometricActivationFunction::BipolarGaussian,
+                GeometricActivationFunction::BipolarSigmoid,
+                GeometricActivationFunction::Sine,
+            ],
+            start_connected: false,
+            start_link_weight_range: WeightRange::bipolar(0.1),
+            start_symmetry: vec![], // Some(3.0), None, Some(3.0)],
+            start_initial_nodes: 0,
+        };
+
+        let mut expression = Expression { link_expression_range: (0.1, 0.5) };
+
+        let substrate_config = substrate.to_configuration();
+
+        // create `generation 0`
+        let mut parents = {
+            let mut initial = UnratedPopulation::new();
+            for _ in 0..evo_config.mu {
+                initial.push(random_genome_creator.create::<_, Position3d>(0, &mut rng));
+            }
+            let mut rated = initial.rate_in_parallel(&|ind| {
+                fitness(ind,
+                        &expression,
+                        &substrate_config,
+                        &domain_fitness_eval)
+            },
+            INFINITY);
+
+            PopulationFitness.apply(0, &mut rated);
+
+            rated.select(evo_config.mu,
+                         &evo_config.objectives,
+                         &selection,
+                         &mut rng)
+        };
+
+
+        let mut best_individual_i = 0;
+        let mut best_fitness = parents.individuals()[best_individual_i].fitness().domain_fitness;
+        for (i, ind) in parents.individuals().iter().enumerate() {
+            let fitness = ind.fitness().domain_fitness;
+            if fitness > best_fitness {
+                best_fitness = fitness;
+                best_individual_i = i;
+            }
+        }
+
+        let mut state = State {
+            running: true,
+            recalc_fitness: false,
+            // recalc_substrate
+            iteration: 0,
+            best_fitness: best_fitness,
+            mu: evo_config.mu as i32,
+            lambda: evo_config.lambda as i32,
+            k: evo_config.k as i32,
+
+            mutate_add_node: reproduction.mating_method_weights.mutate_add_node as i32,
+            mutate_drop_node: reproduction.mating_method_weights.mutate_drop_node as i32,
+            mutate_modify_node: reproduction.mating_method_weights.mutate_modify_node as i32,
+            mutate_connect: reproduction.mating_method_weights.mutate_connect as i32,
+            mutate_disconnect: reproduction.mating_method_weights.mutate_disconnect as i32,
+            mutate_weights: reproduction.mating_method_weights.mutate_weights as i32,
+
+            best_fitness_history: vec![(0, best_fitness)],
+
+            nm_edge_score: domain_fitness_eval.edge_score,
+            nm_iters: domain_fitness_eval.iters as i32,
+            nm_eps: domain_fitness_eval.eps,
+
+            mutate_element_prob: reproduction.mutate_element_prob.get(),
+            nsgp_objective_eps: selection.objective_eps as f32,
+            weight_perturbance_sigma: weight_perturbance_sigma as f32,
+            link_weight_range: link_weight_range as f32,
+            link_weight_creation_sigma: reproduction.link_weight_creation_sigma as f32,
+
+            rotate_substrate_x: 45.0,
+            rotate_substrate_y: 0.0,
+            rotate_substrate_z: 0.0,
+            scale_substrate_x: 0.5,
+            scale_substrate_y: 0.5,
+            scale_substrate_z: 0.5,
+
+            link_expression_min: expression.link_expression_range.0 as f32,
+            link_expression_max: expression.link_expression_range.1 as f32,
+
+
+            objectives_use_behavioral: true,
+            objectives_use_cct: true,
+            objectives_use_age: true,
+
+            action: Action::None,
+        };
+
+        let mut program_substrate: Option<glium::Program> = None;
+        let mut program_vertex: Option<glium::Program> = None;
+
+        loop {
+            {
+                support.render(CLEAR_COLOR, |display, imgui, renderer, target, delta_f| {
+                    let best_ind = &parents.individuals()[best_individual_i];
+
+                    let mut network_builder = VizNetworkBuilder::new();
+                    let (_, _) = expression.express(&best_ind.genome(),
+                    &mut network_builder,
+                    &substrate_config);
+
+                    let vertex_buffer = {
+                        glium::VertexBuffer::new(display, &network_builder.point_list).unwrap()
+                    };
+
+                    let point_index_buffer = glium::index::NoIndices(PrimitiveType::Points);
+                    let line_index_buffer  = glium::IndexBuffer::new(display, PrimitiveType::LinesList,
+                                                                     &network_builder.link_index_list).unwrap();
+
+
+                    // Layout the CPPN
+                    let cppn = Cppn::new(best_ind.genome().network());
+                    let layers = cppn.group_layers();
+                    let mut dy = DistributeInterval::new(layers.len(), -1.0, 1.0);
+
+                    let mut cppn_node_positions: Vec<_> = best_ind.genome().network().nodes().iter().map(|node| {
+                        Vertex{position: [0.0, 0.0, 0.0], color: [0.0, 1.0, 0.0]}
+                    }).collect();
+
+                    for layer in layers {
+                        let y = dy.next().unwrap();
+                        let mut dx = DistributeInterval::new(layer.len(), -1.0, 1.0);
+                        for nodeidx in layer {
+                            let x = dx.next().unwrap();
+                            cppn_node_positions[nodeidx].position[0] = x as f32;
+                            cppn_node_positions[nodeidx].position[1] = -y as f32;
+                        }
+                    }
+
+                    let mut cppn_links = Vec::new();
+                    best_ind.genome().network().each_link_ref(|link_ref| {
+                        let src = link_ref.link().source_node_index().index();
+                        let dst = link_ref.link().target_node_index().index();
+                        cppn_links.push(src as u32);
+                        cppn_links.push(dst as u32);
+                    });
+
+                    let vertex_buffer_cppn = glium::VertexBuffer::new(display, &cppn_node_positions).unwrap();
+                    let cppn_index_buffer = glium::IndexBuffer::new(display, PrimitiveType::LinesList, &cppn_links).unwrap();
+
+                    if program_substrate.is_none() {
+                        program_substrate = Some(program!(display,
+                                                          140 => {
+                                                              vertex: "
                     #version 140
                     uniform mat4 matrix;
                     uniform mat4 perspective;
@@ -608,14 +674,14 @@ fn main() {
                         color = vec4(fl_color, 1.0);
                     }
                 "
-                                            },
-                                            ).unwrap());
-                }
+                                                          },
+                                                          ).unwrap());
+                    }
 
-                if program_vertex.is_none() {
-                    program_vertex = Some(program!(display,
-                                                   140 => {
-                                                       vertex: "
+                    if program_vertex.is_none() {
+                        program_vertex = Some(program!(display,
+                                                       140 => {
+                                                           vertex: "
                     #version 140
                     uniform mat4 matrix;
                     in vec3 position;
@@ -635,136 +701,194 @@ fn main() {
                         color = vec4(fl_color, 1.0);
                     }
                 "
-                                                   },
-                                                   ).unwrap());
+                                                       },
+                                                       ).unwrap());
+                    }
+
+                    let rx = state.rotate_substrate_x.to_radians();
+                    let ry = state.rotate_substrate_y.to_radians();
+                    let rz = state.rotate_substrate_z.to_radians();
+                    let sx = state.scale_substrate_x;
+                    let sy = state.scale_substrate_y;
+                    let sz = state.scale_substrate_z;
+
+                    let (width, height) = target.get_dimensions();
+                    let (substrate_width, substrate_height) = (400, 400);
+
+
+                    let perspective = {
+                        [
+                            [1.0, 0.0, 0.0, 0.0],
+                            [0.0, 1.0, 0.0, 0.0],
+                            [0.0, 0.0, 1.0, 0.0],
+                            [0.0, 0.0, 0.0, 1.0f32],
+                        ]
+                    };
+
+                    let uniforms_substrate = uniform! {
+                        matrix: [
+                            [sx*ry.cos()*rz.cos(), -ry.cos()*rz.sin(), ry.sin(), 0.0],
+                            [rx.cos()*rz.sin() + rx.sin()*ry.sin()*rz.cos(), sy*(rx.cos()*rz.cos() - rx.sin()*ry.sin()*rz.sin()), -rx.sin()*ry.cos(), 0.0],
+                            [rx.sin()*rz.sin() - rx.cos()*ry.sin()*rz.cos(), rx.sin()*rz.cos() + rx.cos()*ry.sin()*rz.sin(), sz*rx.cos()*ry.cos(), 0.0],
+                            [0.0, 0.0, 0.0, 1.0f32]
+                        ],
+                        perspective: perspective
+                    };
+
+                    let uniforms_cppn = uniform! {
+                        matrix: [
+                            [1.0, 0.0, 0.0, 0.0],
+                            [0.0, 1.0, 0.0, 0.0],
+                            [0.0, 0.0, 1.0, 0.0],
+                            [0.0, 0.0, 0.0, 1.0f32]
+                        ]
+                    };
+
+                    let draw_parameters_substrate = glium::draw_parameters::DrawParameters {
+                        line_width: Some(1.0),
+                        point_size: Some(10.0),
+                        viewport: Some(glium::Rect {left: 0, bottom: 0, width: substrate_width, height: substrate_height}),
+                        .. Default::default()
+                    };
+                    let draw_parameters2 = glium::draw_parameters::DrawParameters {
+                        line_width: Some(1.0),
+                        point_size: Some(10.0),
+                        viewport: Some(glium::Rect {left: substrate_width, bottom: 0, width: width-substrate_width, height: height}),
+                        .. Default::default()
+                    };
+
+                    target.draw(&vertex_buffer, &point_index_buffer, program_substrate.as_ref().unwrap(), &uniforms_substrate, &draw_parameters_substrate).unwrap();
+                    target.draw(&vertex_buffer, &line_index_buffer, program_substrate.as_ref().unwrap(), &uniforms_substrate, &draw_parameters_substrate).unwrap();
+
+                    target.draw(&vertex_buffer_cppn, &glium::index::NoIndices(PrimitiveType::Points), program_vertex.as_ref().unwrap(), &uniforms_cppn, &draw_parameters2).unwrap();
+                    target.draw(&vertex_buffer_cppn, &cppn_index_buffer, program_vertex.as_ref().unwrap(), &uniforms_cppn, &draw_parameters2).unwrap();
+
+                    let ui = imgui.frame(width, height, delta_f);
+                    gui(&ui, &mut state, &parents);
+                    renderer.render(target, ui).unwrap();
+                }
+                );
+
+                let active = support.update_events();
+                if !active {
+                    break;
                 }
 
-                let rx = state.rotate_substrate_x.to_radians();
-                let ry = state.rotate_substrate_y.to_radians();
-                let rz = state.rotate_substrate_z.to_radians();
-                let sx = state.scale_substrate_x;
-                let sy = state.scale_substrate_y;
-                let sz = state.scale_substrate_z;
+                match state.action {
+                    Action::ExportBest => {
+                        println!("Export best");
+                        println!("Iteration: {}", state.iteration);
 
-                let (width, height) = target.get_dimensions();
-                let (substrate_width, substrate_height) = (400, 400);
+                        let best = &parents.individuals()[best_individual_i];
+
+                        let mut file = File::create("best.gml").unwrap();
+                        let mut network_builder = GMLNetworkBuilder::new();
+                        network_builder.set_writer(&mut file);
+                        network_builder.begin();
+                        let (behavior, connection_cost) = expression.express(best.genome(),
+                        &mut network_builder,
+                        &substrate_config);
+                        network_builder.end();
+                    }
+                    _ => {
+                    }
+                }
+                state.action = Action::None;
+
+                evo_config.mu = state.mu as usize;
+                evo_config.lambda = state.lambda as usize;
+                evo_config.k = state.k as usize;
+                reproduction.mating_method_weights.mutate_add_node = state.mutate_add_node as u32;
+                reproduction.mating_method_weights.mutate_drop_node = state.mutate_drop_node as u32;
+                reproduction.mating_method_weights.mutate_modify_node = state.mutate_modify_node as u32;
+                reproduction.mating_method_weights.mutate_connect = state.mutate_connect as u32;
+                reproduction.mating_method_weights.mutate_disconnect = state.mutate_disconnect as u32;
+                reproduction.mating_method_weights.mutate_weights = state.mutate_weights as u32;
+                domain_fitness_eval.edge_score = state.nm_edge_score;
+                domain_fitness_eval.iters = state.nm_iters as usize;
+                domain_fitness_eval.eps = state.nm_eps;
 
 
-                let perspective = {
-                    [
-                        [1.0, 0.0, 0.0, 0.0],
-                        [0.0, 1.0, 0.0, 0.0],
-                        [0.0, 0.0, 1.0, 0.0],
-                        [0.0, 0.0, 0.0, 1.0f32],
-                    ]
+                reproduction.mutate_element_prob = Prob::new(state.mutate_element_prob);
+                selection.objective_eps = state.nsgp_objective_eps as f64;
+                reproduction.weight_perturbance = WeightPerturbanceMethod::JiggleGaussian {
+                    sigma: state.weight_perturbance_sigma as f64,
                 };
+                reproduction.link_weight_range = WeightRange::bipolar(state.link_weight_range as f64);
+                reproduction.link_weight_creation_sigma = state.link_weight_creation_sigma as f64;
 
-                let uniforms_substrate = uniform! {
-                    matrix: [
-                        [sx*ry.cos()*rz.cos(), -ry.cos()*rz.sin(), ry.sin(), 0.0],
-                        [rx.cos()*rz.sin() + rx.sin()*ry.sin()*rz.cos(), sy*(rx.cos()*rz.cos() - rx.sin()*ry.sin()*rz.sin()), -rx.sin()*ry.cos(), 0.0],
-                        [rx.sin()*rz.sin() - rx.cos()*ry.sin()*rz.cos(), rx.sin()*rz.cos() + rx.cos()*ry.sin()*rz.sin(), sz*rx.cos()*ry.cos(), 0.0],
-                        [0.0, 0.0, 0.0, 1.0f32]
-                    ],
-                    perspective: perspective
-                };
+                expression.link_expression_range = (state.link_expression_min as f64,
+                                                    state.link_expression_max as f64);
 
-                let uniforms_cppn = uniform! {
-                    matrix: [
-                        [1.0, 0.0, 0.0, 0.0],
-                        [0.0, 1.0, 0.0, 0.0],
-                        [0.0, 0.0, 1.0, 0.0],
-                        [0.0, 0.0, 0.0, 1.0f32]
-                    ]
-                };
+                let mut new_objectives = Vec::new();
+                new_objectives.push(0);
+                if state.objectives_use_behavioral {
+                    new_objectives.push(1);
+                }
+                if state.objectives_use_cct {
+                    new_objectives.push(2);
+                }
+                if state.objectives_use_age {
+                    new_objectives.push(3);
+                }
 
-                let draw_parameters_substrate = glium::draw_parameters::DrawParameters {
-                    line_width: Some(1.0),
-                    point_size: Some(10.0),
-                    viewport: Some(glium::Rect {left: 0, bottom: 0, width: substrate_width, height: substrate_height}),
-                    .. Default::default()
-                };
-                let draw_parameters2 = glium::draw_parameters::DrawParameters {
-                    line_width: Some(1.0),
-                    point_size: Some(10.0),
-                    viewport: Some(glium::Rect {left: substrate_width, bottom: 0, width: width-substrate_width, height: height}),
-                    .. Default::default()
-                };
+                if evo_config.objectives != new_objectives {
+                    evo_config.objectives = new_objectives;
+                }
 
-                target.draw(&vertex_buffer, &point_index_buffer, program_substrate.as_ref().unwrap(), &uniforms_substrate, &draw_parameters_substrate).unwrap();
-                target.draw(&vertex_buffer, &line_index_buffer, program_substrate.as_ref().unwrap(), &uniforms_substrate, &draw_parameters_substrate).unwrap();
+                if state.recalc_fitness {
+                    state.recalc_fitness = false;
+                    let offspring = parents.into_unrated();
+                    let mut next_gen = offspring.rate_in_parallel(&|ind| {
+                        fitness(ind,
+                                &expression,
+                                &substrate_config,
+                                &domain_fitness_eval)
+                    },
+                    INFINITY);
 
-                target.draw(&vertex_buffer_cppn, &glium::index::NoIndices(PrimitiveType::Points), program_vertex.as_ref().unwrap(), &uniforms_cppn, &draw_parameters2).unwrap();
-                target.draw(&vertex_buffer_cppn, &cppn_index_buffer, program_vertex.as_ref().unwrap(), &uniforms_cppn, &draw_parameters2).unwrap();
+                    PopulationFitness.apply(state.iteration, &mut next_gen);
+                    parents = next_gen.select(evo_config.mu,
+                                              &evo_config.objectives,
+                                              &selection,
+                                              &mut rng);
 
-                let ui = imgui.frame(width, height, delta_f);
-                gui(&ui, &mut state, &parents);
-                renderer.render(target, ui).unwrap();
-            }
-            );
+                    best_individual_i = 0;
+                    best_fitness = parents.individuals()[best_individual_i].fitness().domain_fitness;
+                    for (i, ind) in parents.individuals().iter().enumerate() {
+                        let fitness = ind.fitness().domain_fitness;
+                        if fitness > best_fitness {
+                            best_fitness = fitness;
+                            best_individual_i = i;
+                        }
+                    }
 
-            let active = support.update_events();
-            if !active {
-                break;
-            }
-
-            evo_config.mu = state.mu as usize;
-            evo_config.lambda = state.lambda as usize;
-            evo_config.k = state.k as usize;
-            reproduction.mating_method_weights.mutate_add_node = state.mutate_add_node as u32;
-            reproduction.mating_method_weights.mutate_drop_node = state.mutate_drop_node as u32;
-            reproduction.mating_method_weights.mutate_modify_node = state.mutate_modify_node as u32;
-            reproduction.mating_method_weights.mutate_connect = state.mutate_connect as u32;
-            reproduction.mating_method_weights.mutate_disconnect = state.mutate_disconnect as u32;
-            reproduction.mating_method_weights.mutate_weights = state.mutate_weights as u32;
-            domain_fitness_eval.edge_score = state.nm_edge_score;
-            domain_fitness_eval.iters = state.nm_iters as usize;
-            domain_fitness_eval.eps = state.nm_eps;
-
-
-            reproduction.mutate_element_prob = Prob::new(state.mutate_element_prob);
-            selection.objective_eps = state.nsgp_objective_eps as f64;
-            reproduction.weight_perturbance = WeightPerturbanceMethod::JiggleGaussian {
-                sigma: state.weight_perturbance_sigma as f64,
-            };
-            reproduction.link_weight_range = WeightRange::bipolar(state.link_weight_range as f64);
-            reproduction.link_weight_creation_sigma = state.link_weight_creation_sigma as f64;
-
-            expression.link_expression_range = (state.link_expression_min as f64,
-                                                state.link_expression_max as f64);
-
-            let mut new_objectives = Vec::new();
-            new_objectives.push(0);
-            if state.objectives_use_behavioral {
-                new_objectives.push(1);
-            }
-            if state.objectives_use_cct {
-                new_objectives.push(2);
-            }
-            if state.objectives_use_age {
-                new_objectives.push(3);
+                    state.best_fitness = best_fitness;
+                    state.best_fitness_history.push((state.iteration, state.best_fitness));
+                }
             }
 
-            if evo_config.objectives != new_objectives {
-                evo_config.objectives = new_objectives;
-            }
-
-            if state.recalc_fitness {
-                state.recalc_fitness = false;
-                let offspring = parents.into_unrated();
-                let mut next_gen = offspring.rate_in_parallel(&|ind| {
-                                                                  fitness(ind,
-                                                                          &expression,
-                                                                          &substrate_config,
-                                                                          &domain_fitness_eval)
-                                                              },
-                                                              INFINITY);
-
+            if state.running {
+                // create next generation
+                state.iteration += 1;
+                let offspring = parents.reproduce(&mut rng,
+                                                  evo_config.lambda,
+                                                  evo_config.k,
+                                                  &|rng, p1, p2| reproduction.mate(rng, p1, p2, state.iteration));
+                let rated_offspring = offspring.rate_in_parallel(&|ind| {
+                    fitness(ind,
+                            &expression,
+                            &substrate_config,
+                            &domain_fitness_eval)
+                },
+                INFINITY);
+                let mut next_gen = parents.merge(rated_offspring);
                 PopulationFitness.apply(state.iteration, &mut next_gen);
                 parents = next_gen.select(evo_config.mu,
                                           &evo_config.objectives,
                                           &selection,
                                           &mut rng);
+
 
                 best_individual_i = 0;
                 best_fitness = parents.individuals()[best_individual_i].fitness().domain_fitness;
@@ -780,41 +904,4 @@ fn main() {
                 state.best_fitness_history.push((state.iteration, state.best_fitness));
             }
         }
-
-        if state.running {
-            // create next generation
-            state.iteration += 1;
-            let offspring = parents.reproduce(&mut rng,
-                                              evo_config.lambda,
-                                              evo_config.k,
-                                              &|rng, p1, p2| reproduction.mate(rng, p1, p2, state.iteration));
-            let rated_offspring = offspring.rate_in_parallel(&|ind| {
-                                                                 fitness(ind,
-                                                                         &expression,
-                                                                         &substrate_config,
-                                                                         &domain_fitness_eval)
-                                                             },
-                                                             INFINITY);
-            let mut next_gen = parents.merge(rated_offspring);
-            PopulationFitness.apply(state.iteration, &mut next_gen);
-            parents = next_gen.select(evo_config.mu,
-                                      &evo_config.objectives,
-                                      &selection,
-                                      &mut rng);
-
-
-            best_individual_i = 0;
-            best_fitness = parents.individuals()[best_individual_i].fitness().domain_fitness;
-            for (i, ind) in parents.individuals().iter().enumerate() {
-                let fitness = ind.fitness().domain_fitness;
-                if fitness > best_fitness {
-                    best_fitness = fitness;
-                    best_individual_i = i;
-                }
-            }
-
-            state.best_fitness = best_fitness;
-            state.best_fitness_history.push((state.iteration, state.best_fitness));
-        }
     }
-}
