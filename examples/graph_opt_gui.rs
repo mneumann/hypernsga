@@ -140,6 +140,10 @@ struct State {
     link_expression_max: f32,
 
     recalc_fitness: bool,
+
+    objectives_use_behavioral: bool,
+    objectives_use_cct: bool,
+    objectives_use_age: bool,
 }
 
 struct EvoConfig {
@@ -200,6 +204,11 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                                1.0 as c_float,
                                ImVec2::new(400.0, 50.0));
               }
+          }
+          if ui.collapsing_header(im_str!("Objectives")).build() {
+              ui.checkbox(im_str!("Behavioral Diversity"), &mut state.objectives_use_behavioral);
+              ui.checkbox(im_str!("Connection Cost"), &mut state.objectives_use_cct);
+              ui.checkbox(im_str!("Age Diversity"), &mut state.objectives_use_age);
           }
           if ui.collapsing_header(im_str!("Population Settings")).build() {
               ui.slider_i32(im_str!("Population Size"), &mut state.mu, state.k, 1000).build();
@@ -516,6 +525,11 @@ fn main() {
 
         link_expression_min: expression.link_expression_range.0 as f32,
         link_expression_max: expression.link_expression_range.1 as f32,
+
+
+        objectives_use_behavioral: true,
+        objectives_use_cct: true,
+        objectives_use_age: true,
     };
 
     let mut program_substrate: Option<glium::Program> = None;
@@ -718,6 +732,22 @@ fn main() {
 
             expression.link_expression_range = (state.link_expression_min as f64,
                                                 state.link_expression_max as f64);
+
+            let mut new_objectives = Vec::new();
+            new_objectives.push(0);
+            if state.objectives_use_behavioral {
+                new_objectives.push(1);
+            }
+            if state.objectives_use_cct {
+                new_objectives.push(2);
+            }
+            if state.objectives_use_age {
+                new_objectives.push(3);
+            }
+
+            if evo_config.objectives != new_objectives {
+                evo_config.objectives = new_objectives;
+            }
 
             if state.recalc_fitness {
                 state.recalc_fitness = false;
