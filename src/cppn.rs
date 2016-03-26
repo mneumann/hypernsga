@@ -1,5 +1,5 @@
 pub use cppn_ext::cppn::Cppn;
-use cppn_ext::cppn::{CppnNode};
+use cppn_ext::cppn::CppnNode;
 use cppn_ext::activation_function::ActivationFunction;
 pub use cppn_ext::activation_function::GeometricActivationFunction;
 use weight::{Weight, WeightRange, WeightPerturbanceMethod, gaussian};
@@ -23,6 +23,18 @@ const CPPN_OUTPUT_LINK_EXPRESSION: usize = 1;
 const CPPN_OUTPUT_LINK_WEIGHT2: usize = 2;
 const CPPN_OUTPUT_NODE_WEIGHT: usize = 3;
 
+pub struct Saturation {
+    pub zero: f64,
+    pub low: f64,
+    pub high: f64,
+}
+
+impl Saturation {
+    pub fn sum(&self) -> f64 {
+        self.zero + self.low + self.high
+    }
+}
+
 /// Develops a network out of the CPPN
 ///
 /// Returns the Behavior and Connection Cost of the developed network
@@ -31,7 +43,7 @@ fn develop_cppn<P, AF, T, V>(cppn: &mut Cppn<CppnNode<AF>, Weight, ()>,
                              substrate_config: &SubstrateConfiguration<P, T>,
                              visitor: &mut V,
                              link_expression_range: (f64, f64))
-                             -> (Behavior, f64)
+                             -> (Behavior, f64, Saturation)
     where P: Position,
           AF: ActivationFunction,
           V: NetworkBuilder<POS = P, NT = T>
@@ -73,11 +85,35 @@ fn develop_cppn<P, AF, T, V>(cppn: &mut Cppn<CppnNode<AF>, Weight, ()>,
         visitor.add_node(node, node_weight)
     }
 
+    let mut sat = Saturation {
+        zero: 0.0,
+        low: 0.0,
+        high: 0.0,
+    };
+
     for &(source_node_idx, target_node_idx) in links.iter() {
         let source_node = &nodes[source_node_idx];
         let target_node = &nodes[target_node_idx];
         let inputs = [source_node.position.coords(), target_node.position.coords()];
         cppn.process(&inputs[..]);
+
+        // count all nodes with 0.0 and 1.0 and -1.0 signals
+        // these are over/under saturated signals.
+        let mut zero_cnt = 0;
+        let mut low_cnt = 0;
+        let mut high_cnt = 0;
+        for &signal in cppn.incoming_signals() {
+            if signal == 0.0 {
+                zero_cnt += 1;
+            } else if signal == -1.0 {
+                low_cnt += 1;
+            } else if signal == 1.0 {
+                high_cnt += 1;
+            }
+        }
+        sat.zero += (zero_cnt as f64) / cppn.incoming_signals().len() as f64;
+        sat.low += (low_cnt as f64) / cppn.incoming_signals().len() as f64;
+        sat.high += (high_cnt as f64) / cppn.incoming_signals().len() as f64;
 
         let link_weight1 = cppn.read_output(CPPN_OUTPUT_LINK_WEIGHT1).unwrap();
         let link_expression = cppn.read_output(CPPN_OUTPUT_LINK_EXPRESSION).unwrap();
@@ -99,7 +135,7 @@ fn develop_cppn<P, AF, T, V>(cppn: &mut Cppn<CppnNode<AF>, Weight, ()>,
         }
     }
 
-    return (behavior, connection_cost);
+    return (behavior, connection_cost, sat);
 }
 
 /// Determines the domain fitness of `G`
@@ -150,10 +186,10 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
         let mut cppn = Cppn::new(ind.network());
         let mut net_builder = NETBUILDER::new();
 
-        let (behavior, connection_cost) = develop_cppn(&mut cppn,
-                                                       &self.substrate_configuration,
-                                                       &mut net_builder,
-                                                       self.link_expression_range);
+        let (behavior, connection_cost, sat) = develop_cppn(&mut cppn,
+                                                            &self.substrate_configuration,
+                                                            &mut net_builder,
+                                                            self.link_expression_range);
 
         // Evaluate domain specific fitness
         let domain_fitness = self.domain_fitness.fitness(net_builder.network());
@@ -164,6 +200,8 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
             connection_cost: connection_cost,
             behavior: behavior,
             age_diversity: 0.0, // will be calculated in `population_metric`
+            saturation: sat.sum(),
+            complexity: ind.complexity(),
         }
     }
 
@@ -392,7 +430,7 @@ impl Expression {
                                                ind: &G,
                                                net_builder: &mut NETBUILDER,
                                                substrate_config: &SubstrateConfiguration<POS, NT>)
-                                               -> (Behavior, f64)
+                                               -> (Behavior, f64, Saturation)
         where NETBUILDER: NetworkBuilder<POS = POS, NT = NT, Output = GRAPH>,
               POS: Position
     {
@@ -438,7 +476,10 @@ impl PopulationFitness {
         // Calculate age diversity
 
         // calculate average age of population.
-        let total_age: usize = population.individuals().iter().map(|ind| ind.genome().age(current_iteration)).sum::<usize>();
+        let total_age: usize = population.individuals()
+                                         .iter()
+                                         .map(|ind| ind.genome().age(current_iteration))
+                                         .sum::<usize>();
         let avg_age = (total_age as f64) / n as f64;
 
         // set age_diversity

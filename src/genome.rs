@@ -35,6 +35,10 @@ impl<NT: NodeType> Genome<NT> {
         }
     }
 
+    pub fn complexity(&self) -> f64 {
+        self.network.node_count() as f64
+    }
+
     pub fn age(&self, current_iteration: usize) -> usize {
         assert!(current_iteration >= self.birth_iteration);
         current_iteration - self.birth_iteration

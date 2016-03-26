@@ -200,6 +200,8 @@ struct State {
     objectives_use_behavioral: bool,
     objectives_use_cct: bool,
     objectives_use_age: bool,
+    objectives_use_saturation: bool,
+    objectives_use_complexity: bool,
 
     action: Action,
 }
@@ -276,6 +278,8 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                 ui.checkbox(im_str!("Behavioral Diversity"), &mut state.objectives_use_behavioral);
                 ui.checkbox(im_str!("Connection Cost"), &mut state.objectives_use_cct);
                 ui.checkbox(im_str!("Age Diversity"), &mut state.objectives_use_age);
+                ui.checkbox(im_str!("Saturation"), &mut state.objectives_use_saturation);
+                ui.checkbox(im_str!("Complexity"), &mut state.objectives_use_complexity);
             }
             if ui.collapsing_header(im_str!("Population Settings")).build() {
                 ui.slider_i32(im_str!("Population Size"), &mut state.mu, state.k, 1000).build();
@@ -397,7 +401,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
             {
 
                 let mut network_builder = NeuronNetworkBuilder::new();
-                let (behavior, connection_cost) = expression.express(genome,
+                let (behavior, connection_cost, sat) = expression.express(genome,
                                                                      &mut network_builder,
                                                                      substrate_config);
 
@@ -410,6 +414,8 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                     connection_cost: connection_cost,
                     behavior: behavior,
                     age_diversity: 0.0,  // will be calculated in `population_metric`
+                    saturation: sat.sum(),
+                    complexity: genome.complexity(), 
                 }
             }
 
@@ -470,10 +476,10 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
             mu: 100,
             lambda: 200,
             k: 2,
-            objectives: vec![0,1,2,3],
+            objectives: vec![0,1,2,3,4,5],
         };
 
-        let mut selection = SelectNSGPMod { objective_eps: 0.01 };
+        let mut selection = SelectNSGP { objective_eps: 0.01 };
 
         let weight_perturbance_sigma = 0.1;
         let link_weight_range = 1.0;
@@ -611,6 +617,8 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
             objectives_use_behavioral: true,
             objectives_use_cct: true,
             objectives_use_age: true,
+            objectives_use_saturation: true,
+            objectives_use_complexity: true,
 
             action: Action::None,
         };
@@ -624,7 +632,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                     let best_ind = &parents.individuals()[best_individual_i];
 
                     let mut network_builder = VizNetworkBuilder::new();
-                    let (_, _) = expression.express(&best_ind.genome(),
+                    let (_, _, _) = expression.express(&best_ind.genome(),
                     &mut network_builder,
                     &substrate_config);
 
@@ -802,7 +810,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                         let mut network_builder = GMLNetworkBuilder::new();
                         network_builder.set_writer(&mut file);
                         network_builder.begin();
-                        let (behavior, connection_cost) = expression.express(best.genome(),
+                        let (_behavior, _connection_cost, _) = expression.express(best.genome(),
                         &mut network_builder,
                         &substrate_config);
                         network_builder.end();
@@ -852,6 +860,12 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                 }
                 if state.objectives_use_age {
                     new_objectives.push(3);
+                }
+                if state.objectives_use_saturation {
+                    new_objectives.push(4);
+                }
+                if state.objectives_use_complexity {
+                    new_objectives.push(5);
                 }
 
                 if evo_config.objectives != new_objectives {

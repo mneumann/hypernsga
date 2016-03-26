@@ -37,6 +37,10 @@ pub struct Fitness {
     // each genome records 
     pub age_diversity: f64,
 
+    pub saturation: f64,
+
+    pub complexity: f64,
+
     // This is used to determine the behavioral_diversity.
     pub behavior: Behavior,
 }
@@ -52,6 +56,11 @@ impl MultiObjective for Fitness {
             2 => self.connection_cost.partial_cmp(&other.connection_cost).unwrap(),
             // higer age_diversity is better
             3 => self.age_diversity.partial_cmp(&other.age_diversity).unwrap().reverse(),
+            // lower saturation is better
+            4 => self.saturation.partial_cmp(&other.saturation).unwrap(),
+            // lower complexity is better
+            5 => self.complexity.partial_cmp(&other.complexity).unwrap(),
+
             _ => panic!(),
         }
     }
@@ -64,6 +73,8 @@ impl MultiObjective for Fitness {
             }
             2 => self.connection_cost - other.connection_cost,
             3 => self.age_diversity - other.age_diversity,
+            4 => self.saturation - other.saturation,
+            5 => self.complexity - other.complexity,
             _ => panic!(),
         }
     }
