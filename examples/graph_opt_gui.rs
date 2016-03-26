@@ -16,13 +16,14 @@ use hypernsga::graph;
 use hypernsga::domain_graph::{Neuron, NeuronNetworkBuilder, GraphSimilarity};
 use hypernsga::network_builder::NetworkBuilder;
 use hypernsga::cppn::{Cppn, GeometricActivationFunction, RandomGenomeCreator, Reproduction,
-Expression, G, PopulationFitness};
+                      Expression, G, PopulationFitness};
 use hypernsga::fitness::{Fitness, DomainFitness};
 use hypernsga::mating::MatingMethodWeights;
 use hypernsga::prob::Prob;
 use hypernsga::weight::{WeightPerturbanceMethod, WeightRange};
-use hypernsga::substrate::{Node, Substrate, SubstrateConfiguration, Position, Position3d, Position2d,
-NodeConnectivity};
+use hypernsga::substrate::{Node, Substrate, SubstrateConfiguration, Position, Position3d,
+                           Position2d, NodeConnectivity};
+use hypernsga::placement;
 use hypernsga::distribute::DistributeInterval;
 use nsga2::selection::SelectNSGP;
 use nsga2::population::{UnratedPopulation, RatedPopulation, RankedPopulation};
@@ -70,14 +71,16 @@ impl NetworkBuilder for VizNetworkBuilder {
 
     fn add_node(&mut self, node: &Node<Self::POS, Self::NT>, _param: f64) {
         assert!(node.index == self.point_list.len());
-        let color = 
-            match node.node_info {
-                Neuron::Input  => [0.0, 1.0, 0.0],
-                Neuron::Hidden => [0.0, 0.0, 0.0],
-                Neuron::Output => [1.0, 0.0, 0.0],
-            };
-        self.point_list.push(Vertex{position: [node.position.x() as f32, node.position.y() as f32, node.position.z() as f32],
-            color: color
+        let color = match node.node_info {
+            Neuron::Input => [0.0, 1.0, 0.0],
+            Neuron::Hidden => [0.0, 0.0, 0.0],
+            Neuron::Output => [1.0, 0.0, 0.0],
+        };
+        self.point_list.push(Vertex {
+            position: [node.position.x() as f32,
+                       node.position.y() as f32,
+                       node.position.z() as f32],
+            color: color,
         });
     }
 
@@ -120,13 +123,10 @@ struct State {
     link_weight_creation_sigma: f32,
 
     best_fitness_history: Vec<(usize, f64)>,
-    //crossover_weights: 0,
-
-
+    // crossover_weights: 0,
     nm_edge_score: bool,
     nm_iters: i32,
     nm_eps: f32,
-
 
     rotate_substrate_x: f32,
     rotate_substrate_y: f32,
@@ -134,7 +134,6 @@ struct State {
     scale_substrate_x: f32,
     scale_substrate_y: f32,
     scale_substrate_z: f32,
-
 }
 
 struct EvoConfig {
@@ -153,82 +152,129 @@ extern "C" fn values_getter(data: *mut c_void, idx: c_int) -> c_float {
 
 fn gui<'a>(ui: &Ui<'a>, state: &mut State) {
     ui.window(im_str!("Evolutionary Graph Optimization"))
-        .size((300.0, 100.0), ImGuiSetCond_FirstUseEver)
-        .build(|| {
-            if ui.collapsing_header(im_str!("General")).build() {
-                ui.text(im_str!("Iteration: {}", state.iteration));
-                ui.text(im_str!("Best Fitness: {:?}", state.best_fitness));
-                ui.separator();
-                if state.running {
-                    if ui.small_button(im_str!("STOP")) {
-                        state.running = false;
-                    }
-                } else {
-                    if ui.small_button(im_str!("START")) {
-                        state.running = true;
-                    }
-                }
-                ui.separator();
+      .size((300.0, 100.0), ImGuiSetCond_FirstUseEver)
+      .build(|| {
+          if ui.collapsing_header(im_str!("General")).build() {
+              ui.text(im_str!("Iteration: {}", state.iteration));
+              ui.text(im_str!("Best Fitness: {:?}", state.best_fitness));
+              ui.separator();
+              if state.running {
+                  if ui.small_button(im_str!("STOP")) {
+                      state.running = false;
+                  }
+              } else {
+                  if ui.small_button(im_str!("START")) {
+                      state.running = true;
+                  }
+              }
+              ui.separator();
 
-                let num_points = state.best_fitness_history.len();
-                unsafe {
-                    igPlotLines2(im_str!("performance").as_ptr(),
-                    values_getter,
-                    (state as *mut State) as *mut c_void,
-                    num_points as c_int,
-                    0 as c_int,
-                    im_str!("overlay text").as_ptr(),
-                    0.0 as c_float,
-                    1.0 as c_float,
-                    ImVec2::new(400.0, 50.0)
-                    );
-                }
-            }
-            if ui.collapsing_header(im_str!("Population Settings")).build() {
-                ui.slider_i32(im_str!("Population Size"), &mut state.mu, state.k, 1000).build();
-                ui.slider_i32(im_str!("Offspring Size"), &mut state.lambda, 1, 1000).build();
-            }
+              let num_points = state.best_fitness_history.len();
+              unsafe {
+                  igPlotLines2(im_str!("performance").as_ptr(),
+                               values_getter,
+                               (state as *mut State) as *mut c_void,
+                               num_points as c_int,
+                               0 as c_int,
+                               im_str!("overlay text").as_ptr(),
+                               0.0 as c_float,
+                               1.0 as c_float,
+                               ImVec2::new(400.0, 50.0));
+              }
+          }
+          if ui.collapsing_header(im_str!("Population Settings")).build() {
+              ui.slider_i32(im_str!("Population Size"), &mut state.mu, state.k, 1000).build();
+              ui.slider_i32(im_str!("Offspring Size"), &mut state.lambda, 1, 1000).build();
+          }
 
-            if ui.collapsing_header(im_str!("Selection")).build() {
-                ui.slider_i32(im_str!("Tournament Size"), &mut state.k, 1, state.mu).build();
-                ui.slider_f32(im_str!("NSGP Objective Epsilon"), &mut state.nsgp_objective_eps, 0.0, 1.0).build();
-            }
+          if ui.collapsing_header(im_str!("Selection")).build() {
+              ui.slider_i32(im_str!("Tournament Size"), &mut state.k, 1, state.mu).build();
+              ui.slider_f32(im_str!("NSGP Objective Epsilon"),
+                            &mut state.nsgp_objective_eps,
+                            0.0,
+                            1.0)
+                .build();
+          }
 
-            if ui.collapsing_header(im_str!("View")).build() {
-                ui.slider_f32(im_str!("Rotate Substrate x"), &mut state.rotate_substrate_x, 0.0, 360.0).build();
-                ui.slider_f32(im_str!("Rotate Substrate y"), &mut state.rotate_substrate_y, 0.0, 360.0).build();
-                ui.slider_f32(im_str!("Rotate Substrate z"), &mut state.rotate_substrate_z, 0.0, 360.0).build();
-                ui.slider_f32(im_str!("Scale Substrate x"), &mut state.scale_substrate_x, 0.0, 1.0).build();
-                ui.slider_f32(im_str!("Scale Substrate y"), &mut state.scale_substrate_y, 0.0, 1.0).build();
-                ui.slider_f32(im_str!("Scale Substrate z"), &mut state.scale_substrate_z, 0.0, 1.0).build();
-            }
+          if ui.collapsing_header(im_str!("View")).build() {
+              ui.slider_f32(im_str!("Rotate Substrate x"),
+                            &mut state.rotate_substrate_x,
+                            0.0,
+                            360.0)
+                .build();
+              ui.slider_f32(im_str!("Rotate Substrate y"),
+                            &mut state.rotate_substrate_y,
+                            0.0,
+                            360.0)
+                .build();
+              ui.slider_f32(im_str!("Rotate Substrate z"),
+                            &mut state.rotate_substrate_z,
+                            0.0,
+                            360.0)
+                .build();
+              ui.slider_f32(im_str!("Scale Substrate x"),
+                            &mut state.scale_substrate_x,
+                            0.0,
+                            1.0)
+                .build();
+              ui.slider_f32(im_str!("Scale Substrate y"),
+                            &mut state.scale_substrate_y,
+                            0.0,
+                            1.0)
+                .build();
+              ui.slider_f32(im_str!("Scale Substrate z"),
+                            &mut state.scale_substrate_z,
+                            0.0,
+                            1.0)
+                .build();
+          }
 
-            if ui.collapsing_header(im_str!("CPPN")).build() {
-                ui.slider_f32(im_str!("Link Weight Range (bipolar)"), &mut state.link_weight_range, 0.1, 5.0).build();
-                ui.slider_f32(im_str!("Link Weight Creation Sigma"), &mut state.link_weight_creation_sigma, 0.01, 1.0).build();
-                ui.slider_f32(im_str!("Weight Perturbance Sigma"), &mut state.weight_perturbance_sigma, 0.0, 1.0).build();
-            }
+          if ui.collapsing_header(im_str!("CPPN")).build() {
+              ui.slider_f32(im_str!("Link Weight Range (bipolar)"),
+                            &mut state.link_weight_range,
+                            0.1,
+                            5.0)
+                .build();
+              ui.slider_f32(im_str!("Link Weight Creation Sigma"),
+                            &mut state.link_weight_creation_sigma,
+                            0.01,
+                            1.0)
+                .build();
+              ui.slider_f32(im_str!("Weight Perturbance Sigma"),
+                            &mut state.weight_perturbance_sigma,
+                            0.0,
+                            1.0)
+                .build();
+          }
 
-            if ui.collapsing_header(im_str!("Neighbor Matching")).build() {
-                ui.checkbox(im_str!("Edge Weight Scoring"), &mut state.nm_edge_score);
-                ui.slider_i32(im_str!("Iterations"), &mut state.nm_iters, 1, 1000).build();
-                ui.slider_f32(im_str!("Eps"), &mut state.nm_eps, 0.0, 1.0).build();
-            }
+          if ui.collapsing_header(im_str!("Neighbor Matching")).build() {
+              ui.checkbox(im_str!("Edge Weight Scoring"), &mut state.nm_edge_score);
+              ui.slider_i32(im_str!("Iterations"), &mut state.nm_iters, 1, 1000).build();
+              ui.slider_f32(im_str!("Eps"), &mut state.nm_eps, 0.0, 1.0).build();
+          }
 
-            if ui.collapsing_header(im_str!("Mutation")).build() {
-                ui.slider_f32(im_str!("Mutation Rate"), &mut state.mutate_element_prob, 0.0, 1.0).build();
-                ui.slider_i32(im_str!("Weights"), &mut state.mutate_weights, 1, 1000).build();
-                ui.slider_i32(im_str!("Add Node"), &mut state.mutate_add_node, 0, 1000).build();
-                ui.slider_i32(im_str!("Drop Node"), &mut state.mutate_drop_node, 0, 1000).build();
-                ui.slider_i32(im_str!("Modify Node"), &mut state.mutate_modify_node, 0, 1000).build();
-                ui.slider_i32(im_str!("Connect"), &mut state.mutate_connect, 0, 1000).build();
-                ui.slider_i32(im_str!("Disconnect"), &mut state.mutate_disconnect, 0, 1000).build();
-            }
+          if ui.collapsing_header(im_str!("Mutation")).build() {
+              ui.slider_f32(im_str!("Mutation Rate"),
+                            &mut state.mutate_element_prob,
+                            0.0,
+                            1.0)
+                .build();
+              ui.slider_i32(im_str!("Weights"), &mut state.mutate_weights, 1, 1000).build();
+              ui.slider_i32(im_str!("Add Node"), &mut state.mutate_add_node, 0, 1000).build();
+              ui.slider_i32(im_str!("Drop Node"), &mut state.mutate_drop_node, 0, 1000).build();
+              ui.slider_i32(im_str!("Modify Node"),
+                            &mut state.mutate_modify_node,
+                            0,
+                            1000)
+                .build();
+              ui.slider_i32(im_str!("Connect"), &mut state.mutate_connect, 0, 1000).build();
+              ui.slider_i32(im_str!("Disconnect"), &mut state.mutate_disconnect, 0, 1000).build();
+          }
 
-            // ui.separator();
-            // let mouse_pos = ui.imgui().mouse_pos();
-            // ui.text(im_str!("Mouse Position: ({:.1},{:.1})", mouse_pos.0, mouse_pos.1));
-        })
+          // ui.separator();
+          // let mouse_pos = ui.imgui().mouse_pos();
+          // ui.text(im_str!("Mouse Position: ({:.1},{:.1})", mouse_pos.0, mouse_pos.1));
+      })
 }
 
 
@@ -237,7 +283,7 @@ fn fitness<P>(genome: &G,
               expression: &Expression,
               substrate_config: &SubstrateConfiguration<P, Neuron>,
               fitness_eval: &GraphSimilarity)
-    -> Fitness
+              -> Fitness
     where P: Position
 {
 
@@ -277,18 +323,10 @@ fn main() {
 
     println!("{:?}", node_count);
 
-    let min = -1.0;
-    let max = 1.0;
-
     // Input layer
     {
         let z = 0.75;
-        // Distribute on a circle
-        let angle_step = 360.0 / node_count.inputs as f64;
-        for i in 0..node_count.inputs {
-            let angle = (angle_step * i as f64).to_radians();
-            let x = angle.sin();
-            let y = angle.cos();
+        for (x, y) in placement::SunflowerSeed2d::new(node_count.inputs, 0.0) {
             substrate.add_node(Position3d::new(x, y, z), Neuron::Input, NodeConnectivity::Out);
         }
     }
@@ -296,42 +334,21 @@ fn main() {
     // Hidden
     {
         let z = 0.25;
-        // Distribute on a circle
-        let angle_step = 360.0 / node_count.hidden as f64;
-        for i in 0..node_count.hidden {
-            let angle = (angle_step * i as f64).to_radians();
-            let x = angle.sin();
-            let y = angle.cos();
-            substrate.add_node(Position3d::new(x, y, z), Neuron::Hidden, NodeConnectivity::InOut);
+        for (x, y) in placement::SunflowerSeed2d::new(node_count.hidden, 0.0) {
+            substrate.add_node(Position3d::new(x, y, z),
+                               Neuron::Hidden,
+                               NodeConnectivity::InOut);
         }
-
-        /*
-        for x in DistributeInterval::new(node_count.hidden, min, max) {
-            substrate.add_node(Position3d::new(x, 0.0, 0.25),
-            Neuron::Hidden,
-            NodeConnectivity::InOut);
-        }
-        */
     }
 
     // Outputs
     {
         let z = -0.5;
-        // Distribute on a circle
-        let angle_step = 360.0 / node_count.outputs as f64;
-        for i in 0..node_count.outputs {
-            let angle = (angle_step * i as f64).to_radians();
-            let x = angle.sin();
-            let y = angle.cos();
-            substrate.add_node(Position3d::new(x, y, z), Neuron::Output, NodeConnectivity::In);
+        for (x, y) in placement::SunflowerSeed2d::new(node_count.outputs, 0.0) {
+            substrate.add_node(Position3d::new(x, y, z),
+                               Neuron::Output,
+                               NodeConnectivity::In);
         }
-/*
-        for x in DistributeInterval::new(node_count.outputs, min, max) {
-            substrate.add_node(Position3d::new(x, 0.0, -0.75),
-            Neuron::Output,
-            NodeConnectivity::In);
-        }
-        */
     }
 
     let mut evo_config = EvoConfig {
@@ -362,7 +379,9 @@ fn main() {
             GeometricActivationFunction::Sine,
         ],
         mutate_element_prob: Prob::new(0.05),
-        weight_perturbance: WeightPerturbanceMethod::JiggleGaussian { sigma: weight_perturbance_sigma },
+        weight_perturbance: WeightPerturbanceMethod::JiggleGaussian {
+            sigma: weight_perturbance_sigma,
+        },
         link_weight_range: WeightRange::bipolar(link_weight_range),
         link_weight_creation_sigma: 0.1,
 
@@ -398,12 +417,12 @@ fn main() {
             initial.push(random_genome_creator.create::<_, Position3d>(&mut rng));
         }
         let mut rated = initial.rate_in_parallel(&|ind| {
-            fitness(ind,
-                    &expression,
-                    &substrate_config,
-                    &domain_fitness_eval)
-        },
-        INFINITY);
+                                                     fitness(ind,
+                                                             &expression,
+                                                             &substrate_config,
+                                                             &domain_fitness_eval)
+                                                 },
+                                                 INFINITY);
 
         PopulationFitness.apply(&mut rated);
 
@@ -646,8 +665,9 @@ fn main() {
 
             reproduction.mutate_element_prob = Prob::new(state.mutate_element_prob);
             selection.objective_eps = state.nsgp_objective_eps as f64;
-            reproduction.weight_perturbance = WeightPerturbanceMethod::JiggleGaussian { 
-                sigma: state.weight_perturbance_sigma as f64};
+            reproduction.weight_perturbance = WeightPerturbanceMethod::JiggleGaussian {
+                sigma: state.weight_perturbance_sigma as f64,
+            };
             reproduction.link_weight_range = WeightRange::bipolar(state.link_weight_range as f64);
             reproduction.link_weight_creation_sigma = state.link_weight_creation_sigma as f64;
 
@@ -665,12 +685,12 @@ fn main() {
                                               evo_config.k,
                                               &|rng, p1, p2| reproduction.mate(rng, p1, p2));
             let rated_offspring = offspring.rate_in_parallel(&|ind| {
-                fitness(ind,
-                        &expression,
-                        &substrate_config,
-                        &domain_fitness_eval)
-            },
-            INFINITY);
+                                                                 fitness(ind,
+                                                                         &expression,
+                                                                         &substrate_config,
+                                                                         &domain_fitness_eval)
+                                                             },
+                                                             INFINITY);
             let mut next_gen = parents.merge(rated_offspring);
             PopulationFitness.apply(&mut next_gen);
             parents = next_gen.select(evo_config.mu,
@@ -680,7 +700,7 @@ fn main() {
 
 
             best_individual_i = 0;
-            best_fitness = parents.individuals()[best_individual_i].fitness().domain_fitness; 
+            best_fitness = parents.individuals()[best_individual_i].fitness().domain_fitness;
             for (i, ind) in parents.individuals().iter().enumerate() {
                 let fitness = ind.fitness().domain_fitness;
                 if fitness > best_fitness {
