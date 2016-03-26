@@ -49,17 +49,10 @@ struct Vertex {
     color: [f32; 3],
 }
 
-#[derive(Copy, Clone)]
-struct Point {
-    position: [f32; 3],
-}
-
 implement_vertex!(Vertex, position, color);
-implement_vertex!(Point, position);
-
 
 pub struct VizNetworkBuilder {
-    point_list: Vec<Point>,
+    point_list: Vec<Vertex>,
     link_index_list: Vec<u32>,
 }
 
@@ -77,7 +70,15 @@ impl NetworkBuilder for VizNetworkBuilder {
 
     fn add_node(&mut self, node: &Node<Self::POS, Self::NT>, _param: f64) {
         assert!(node.index == self.point_list.len());
-        self.point_list.push(Point{position: [node.position.x() as f32, node.position.y() as f32, node.position.z() as f32]});
+        let color = 
+            match node.node_info {
+                Neuron::Input  => [0.0, 1.0, 0.0],
+                Neuron::Hidden => [0.0, 0.0, 0.0],
+                Neuron::Output => [1.0, 0.0, 0.0],
+            };
+        self.point_list.push(Vertex{position: [node.position.x() as f32, node.position.y() as f32, node.position.z() as f32],
+            color: color
+        });
     }
 
     fn add_link(&mut self,
@@ -130,6 +131,10 @@ struct State {
     rotate_substrate_x: f32,
     rotate_substrate_y: f32,
     rotate_substrate_z: f32,
+    scale_substrate_x: f32,
+    scale_substrate_y: f32,
+    scale_substrate_z: f32,
+
 }
 
 struct EvoConfig {
@@ -193,6 +198,9 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State) {
                 ui.slider_f32(im_str!("Rotate Substrate x"), &mut state.rotate_substrate_x, 0.0, 360.0).build();
                 ui.slider_f32(im_str!("Rotate Substrate y"), &mut state.rotate_substrate_y, 0.0, 360.0).build();
                 ui.slider_f32(im_str!("Rotate Substrate z"), &mut state.rotate_substrate_z, 0.0, 360.0).build();
+                ui.slider_f32(im_str!("Scale Substrate x"), &mut state.scale_substrate_x, 0.0, 1.0).build();
+                ui.slider_f32(im_str!("Scale Substrate y"), &mut state.scale_substrate_y, 0.0, 1.0).build();
+                ui.slider_f32(im_str!("Scale Substrate z"), &mut state.scale_substrate_z, 0.0, 1.0).build();
             }
 
             if ui.collapsing_header(im_str!("CPPN")).build() {
@@ -274,29 +282,56 @@ fn main() {
 
     // Input layer
     {
-        for x in DistributeInterval::new(node_count.inputs, min, max) {
-            substrate.add_node(Position3d::new(x, 0.0, 0.75),
-            Neuron::Input,
-            NodeConnectivity::Out);
+        let z = 0.75;
+        // Distribute on a circle
+        let angle_step = 360.0 / node_count.inputs as f64;
+        for i in 0..node_count.inputs {
+            let angle = (angle_step * i as f64).to_radians();
+            let x = angle.sin();
+            let y = angle.cos();
+            substrate.add_node(Position3d::new(x, y, z), Neuron::Input, NodeConnectivity::Out);
         }
     }
 
     // Hidden
     {
+        let z = 0.25;
+        // Distribute on a circle
+        let angle_step = 360.0 / node_count.hidden as f64;
+        for i in 0..node_count.hidden {
+            let angle = (angle_step * i as f64).to_radians();
+            let x = angle.sin();
+            let y = angle.cos();
+            substrate.add_node(Position3d::new(x, y, z), Neuron::Hidden, NodeConnectivity::InOut);
+        }
+
+        /*
         for x in DistributeInterval::new(node_count.hidden, min, max) {
             substrate.add_node(Position3d::new(x, 0.0, 0.25),
             Neuron::Hidden,
             NodeConnectivity::InOut);
         }
+        */
     }
 
     // Outputs
     {
+        let z = -0.5;
+        // Distribute on a circle
+        let angle_step = 360.0 / node_count.outputs as f64;
+        for i in 0..node_count.outputs {
+            let angle = (angle_step * i as f64).to_radians();
+            let x = angle.sin();
+            let y = angle.cos();
+            substrate.add_node(Position3d::new(x, y, z), Neuron::Output, NodeConnectivity::In);
+        }
+/*
         for x in DistributeInterval::new(node_count.outputs, min, max) {
             substrate.add_node(Position3d::new(x, 0.0, -0.75),
             Neuron::Output,
             NodeConnectivity::In);
         }
+        */
     }
 
     let mut evo_config = EvoConfig {
@@ -306,7 +341,7 @@ fn main() {
         num_objectives: 3,
     };
 
-    let mut selection = SelectNSGP { objective_eps: 0.1 };
+    let mut selection = SelectNSGP { objective_eps: 0.01 };
 
     let weight_perturbance_sigma = 0.1;
     let link_weight_range = 1.0;
@@ -419,9 +454,12 @@ fn main() {
         rotate_substrate_x: 45.0,
         rotate_substrate_y: 0.0,
         rotate_substrate_z: 0.0,
+        scale_substrate_x: 0.5,
+        scale_substrate_y: 0.5,
+        scale_substrate_z: 0.5,
     };
 
-    let mut program: Option<glium::Program> = None;
+    let mut program_substrate: Option<glium::Program> = None;
     let mut program_vertex: Option<glium::Program> = None;
 
     loop {
@@ -473,23 +511,28 @@ fn main() {
                 let vertex_buffer_cppn = glium::VertexBuffer::new(display, &cppn_node_positions).unwrap();
                 let cppn_index_buffer = glium::IndexBuffer::new(display, PrimitiveType::LinesList, &cppn_links).unwrap();
 
-                if program.is_none() {
-                    program = Some(program!(display,
+                if program_substrate.is_none() {
+                    program_substrate = Some(program!(display,
                                             140 => {
                                                 vertex: "
                     #version 140
                     uniform mat4 matrix;
+                    uniform mat4 perspective;
                     in vec3 position;
+                    in vec3 color;
+                    out vec3 fl_color;
                     void main() {
-                        gl_Position = matrix * vec4(position, 1.0);
+                        gl_Position = perspective * matrix * vec4(position, 1.0);
+                        fl_color = color;
                     }
                 ",
 
                 fragment: "
                     #version 140
+                    in vec3 fl_color;
                     out vec4 color;
                     void main() {
-                        color = vec4(1.0, 0.0, 0.0, 1.0);
+                        color = vec4(fl_color, 1.0);
                     }
                 "
                                             },
@@ -526,14 +569,31 @@ fn main() {
                 let rx = state.rotate_substrate_x.to_radians();
                 let ry = state.rotate_substrate_y.to_radians();
                 let rz = state.rotate_substrate_z.to_radians();
+                let sx = state.scale_substrate_x;
+                let sy = state.scale_substrate_y;
+                let sz = state.scale_substrate_z;
 
-                let uniforms = uniform! {
+                let (width, height) = target.get_dimensions();
+                let (substrate_width, substrate_height) = (400, 400);
+
+
+                let perspective = {
+                    [
+                        [1.0, 0.0, 0.0, 0.0],
+                        [0.0, 1.0, 0.0, 0.0],
+                        [0.0, 0.0, 1.0, 0.0],
+                        [0.0, 0.0, 0.0, 1.0f32],
+                    ]
+                };
+
+                let uniforms_substrate = uniform! {
                     matrix: [
-                        [ry.cos()*rz.cos(), -ry.cos()*rz.sin(), ry.sin(), 0.0],
-                        [rx.cos()*rz.sin() + rx.sin()*ry.sin()*rz.cos(), rx.cos()*rz.cos() - rx.sin()*ry.sin()*rz.sin(), -rx.sin()*ry.cos(), 0.0],
-                        [rx.sin()*rz.sin() - rx.cos()*ry.sin()*rz.cos(), rx.sin()*rz.cos() + rx.cos()*ry.sin()*rz.sin(), rx.cos()*ry.cos(), 0.0],
+                        [sx*ry.cos()*rz.cos(), -ry.cos()*rz.sin(), ry.sin(), 0.0],
+                        [rx.cos()*rz.sin() + rx.sin()*ry.sin()*rz.cos(), sy*(rx.cos()*rz.cos() - rx.sin()*ry.sin()*rz.sin()), -rx.sin()*ry.cos(), 0.0],
+                        [rx.sin()*rz.sin() - rx.cos()*ry.sin()*rz.cos(), rx.sin()*rz.cos() + rx.cos()*ry.sin()*rz.sin(), sz*rx.cos()*ry.cos(), 0.0],
                         [0.0, 0.0, 0.0, 1.0f32]
                     ],
+                    perspective: perspective
                 };
 
                 let uniforms_cppn = uniform! {
@@ -545,25 +605,25 @@ fn main() {
                     ]
                 };
 
-                let draw_parameters = glium::draw_parameters::DrawParameters {
+                let draw_parameters_substrate = glium::draw_parameters::DrawParameters {
                     line_width: Some(1.0),
                     point_size: Some(10.0),
-                    viewport: Some(glium::Rect {left: 0, bottom: 0, width: 400, height: 400}), 
+                    viewport: Some(glium::Rect {left: 0, bottom: 0, width: substrate_width, height: substrate_height}),
                     .. Default::default()
                 };
                 let draw_parameters2 = glium::draw_parameters::DrawParameters {
                     line_width: Some(1.0),
                     point_size: Some(10.0),
+                    viewport: Some(glium::Rect {left: substrate_width, bottom: 0, width: width-substrate_width, height: height}),
                     .. Default::default()
                 };
 
-                target.draw(&vertex_buffer, &point_index_buffer, program.as_ref().unwrap(), &uniforms, &draw_parameters).unwrap();
-                target.draw(&vertex_buffer, &line_index_buffer, program.as_ref().unwrap(), &uniforms, &draw_parameters).unwrap();
+                target.draw(&vertex_buffer, &point_index_buffer, program_substrate.as_ref().unwrap(), &uniforms_substrate, &draw_parameters_substrate).unwrap();
+                target.draw(&vertex_buffer, &line_index_buffer, program_substrate.as_ref().unwrap(), &uniforms_substrate, &draw_parameters_substrate).unwrap();
 
                 target.draw(&vertex_buffer_cppn, &glium::index::NoIndices(PrimitiveType::Points), program_vertex.as_ref().unwrap(), &uniforms_cppn, &draw_parameters2).unwrap();
                 target.draw(&vertex_buffer_cppn, &cppn_index_buffer, program_vertex.as_ref().unwrap(), &uniforms_cppn, &draw_parameters2).unwrap();
 
-                let (width, height) = target.get_dimensions();
                 let ui = imgui.frame(width, height, delta_f);
                 gui(&ui, &mut state);
                 renderer.render(target, ui).unwrap();
