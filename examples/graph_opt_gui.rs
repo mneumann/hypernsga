@@ -27,6 +27,7 @@ use hypernsga::placement;
 use hypernsga::distribute::DistributeInterval;
 use nsga2::selection::SelectNSGP;
 use nsga2::population::{UnratedPopulation, RatedPopulation, RankedPopulation};
+use nsga2::multi_objective::MultiObjective;
 use std::f64::INFINITY;
 use criterion_stats::univariate::Sample;
 use std::env;
@@ -155,7 +156,7 @@ extern "C" fn values_getter(data: *mut c_void, idx: c_int) -> c_float {
     }
 }
 
-fn gui<'a>(ui: &Ui<'a>, state: &mut State) {
+fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitness>) {
     ui.window(im_str!("Evolutionary Graph Optimization"))
       .size((300.0, 100.0), ImGuiSetCond_FirstUseEver)
       .build(|| {
@@ -174,6 +175,16 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State) {
           }
           if ui.small_button(im_str!("Recalc Fitness")) {
               state.recalc_fitness = true;
+          }
+
+          if ui.collapsing_header(im_str!("Population Metrics")).build() {
+            let best_domain = population.individuals().iter().max_by_key(|ind| (ind.fitness().domain_fitness * 1_000_000.0) as usize).unwrap();
+            let worst_domain = population.individuals().iter().min_by_key(|ind| (ind.fitness().domain_fitness * 1_000_000.0) as usize).unwrap();
+            ui.text(im_str!("Best Domain Fitness: {:.3}", best_domain.fitness().domain_fitness));
+            ui.text(im_str!("Age of Best: {}", best_domain.genome().age(state.iteration)));
+
+            ui.text(im_str!("Worst Domain Fitness: {:.3}", worst_domain.fitness().domain_fitness));
+            ui.text(im_str!("Age of Worst: {}", worst_domain.genome().age(state.iteration)));
           }
 
           if ui.collapsing_header(im_str!("History")).build() {
@@ -278,16 +289,16 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State) {
                             0.0,
                             1.0)
                 .build();
-              ui.slider_i32(im_str!("Weights"), &mut state.mutate_weights, 1, 1000).build();
-              ui.slider_i32(im_str!("Add Node"), &mut state.mutate_add_node, 0, 1000).build();
-              ui.slider_i32(im_str!("Drop Node"), &mut state.mutate_drop_node, 0, 1000).build();
+              ui.slider_i32(im_str!("Weights"), &mut state.mutate_weights, 1, 100).build();
+              ui.slider_i32(im_str!("Add Node"), &mut state.mutate_add_node, 0, 100).build();
+              ui.slider_i32(im_str!("Drop Node"), &mut state.mutate_drop_node, 0, 100).build();
               ui.slider_i32(im_str!("Modify Node"),
                             &mut state.mutate_modify_node,
                             0,
-                            1000)
+                            100)
                 .build();
-              ui.slider_i32(im_str!("Connect"), &mut state.mutate_connect, 0, 1000).build();
-              ui.slider_i32(im_str!("Disconnect"), &mut state.mutate_disconnect, 0, 1000).build();
+              ui.slider_i32(im_str!("Connect"), &mut state.mutate_connect, 0, 100).build();
+              ui.slider_i32(im_str!("Disconnect"), &mut state.mutate_disconnect, 0, 100).build();
           }
 
           // ui.separator();
@@ -319,6 +330,7 @@ fn fitness<P>(genome: &G,
         behavioral_diversity: 0.0, // will be calculated in `population_metric`
         connection_cost: connection_cost,
         behavior: behavior,
+        age_diversity: 0.0,  // will be calculated in `population_metric`
     }
 }
 
@@ -376,7 +388,7 @@ fn main() {
         mu: 100,
         lambda: 200,
         k: 2,
-        num_objectives: 3,
+        num_objectives: 4,
     };
 
     let mut selection = SelectNSGP { objective_eps: 0.01 };
@@ -394,10 +406,12 @@ fn main() {
             crossover_weights: 0,
         },
         activation_functions: vec![
-            //GeometricActivationFunction::Linear,
+            GeometricActivationFunction::Linear,
+            GeometricActivationFunction::Gaussian,
             GeometricActivationFunction::BipolarGaussian,
             GeometricActivationFunction::BipolarSigmoid,
             GeometricActivationFunction::Sine,
+            GeometricActivationFunction::Absolute,
         ],
         mutate_element_prob: Prob::new(0.05),
         weight_perturbance: WeightPerturbanceMethod::JiggleGaussian {
@@ -435,7 +449,7 @@ fn main() {
     let mut parents = {
         let mut initial = UnratedPopulation::new();
         for _ in 0..evo_config.mu {
-            initial.push(random_genome_creator.create::<_, Position3d>(&mut rng));
+            initial.push(random_genome_creator.create::<_, Position3d>(0, &mut rng));
         }
         let mut rated = initial.rate_in_parallel(&|ind| {
                                                      fitness(ind,
@@ -445,7 +459,7 @@ fn main() {
                                                  },
                                                  INFINITY);
 
-        PopulationFitness.apply(&mut rated);
+        PopulationFitness.apply(0, &mut rated);
 
         rated.select(evo_config.mu,
                      evo_config.num_objectives,
@@ -670,7 +684,7 @@ fn main() {
                 target.draw(&vertex_buffer_cppn, &cppn_index_buffer, program_vertex.as_ref().unwrap(), &uniforms_cppn, &draw_parameters2).unwrap();
 
                 let ui = imgui.frame(width, height, delta_f);
-                gui(&ui, &mut state);
+                gui(&ui, &mut state, &parents);
                 renderer.render(target, ui).unwrap();
             }
             );
@@ -716,7 +730,7 @@ fn main() {
                                                               },
                                                               INFINITY);
 
-                PopulationFitness.apply(&mut next_gen);
+                PopulationFitness.apply(state.iteration, &mut next_gen);
                 parents = next_gen.select(evo_config.mu,
                                           evo_config.num_objectives,
                                           &selection,
@@ -743,7 +757,7 @@ fn main() {
             let offspring = parents.reproduce(&mut rng,
                                               evo_config.lambda,
                                               evo_config.k,
-                                              &|rng, p1, p2| reproduction.mate(rng, p1, p2));
+                                              &|rng, p1, p2| reproduction.mate(rng, p1, p2, state.iteration));
             let rated_offspring = offspring.rate_in_parallel(&|ind| {
                                                                  fitness(ind,
                                                                          &expression,
@@ -752,7 +766,7 @@ fn main() {
                                                              },
                                                              INFINITY);
             let mut next_gen = parents.merge(rated_offspring);
-            PopulationFitness.apply(&mut next_gen);
+            PopulationFitness.apply(state.iteration, &mut next_gen);
             parents = next_gen.select(evo_config.mu,
                                       evo_config.num_objectives,
                                       &selection,

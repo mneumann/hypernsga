@@ -34,12 +34,15 @@ pub struct Fitness {
     /// The connection cost of the generated network (smaller value is better!)
     pub connection_cost: f64,
 
+    // each genome records 
+    pub age_diversity: f64,
+
     // This is used to determine the behavioral_diversity.
     pub behavior: Behavior,
 }
 
 impl MultiObjective for Fitness {
-    const NUM_OBJECTIVES: usize = 3;
+    const NUM_OBJECTIVES: usize = 4;
 
     fn cmp_objective(&self, other: &Self, objective: usize) -> Ordering {
         match objective {
@@ -49,6 +52,8 @@ impl MultiObjective for Fitness {
             1 => self.behavioral_diversity.partial_cmp(&other.behavioral_diversity).unwrap().reverse(),
             // smaller connection_cost is better
             2 => self.connection_cost.partial_cmp(&other.connection_cost).unwrap(),
+            // higer age_diversity is better
+            3 => self.age_diversity.partial_cmp(&other.age_diversity).unwrap().reverse(),
             _ => panic!(),
         }
     }
@@ -60,6 +65,7 @@ impl MultiObjective for Fitness {
                 self.behavioral_diversity - other.behavioral_diversity
             }
             2 => self.connection_cost - other.connection_cost,
+            3 => self.age_diversity - other.age_diversity,
             _ => panic!(),
         }
     }
@@ -100,6 +106,17 @@ impl Domination for Fitness {
                 left_dom_cnt += 1;
             }
             Ordering::Greater => {
+                right_dom_cnt += 1;
+            }
+            Ordering::Equal => {}
+        }
+
+        match lhs.age_diversity.partial_cmp(&rhs.age_diversity).unwrap() {
+            Ordering::Greater => {
+                // higher values are better
+                left_dom_cnt += 1;
+            }
+            Ordering::Less => {
                 right_dom_cnt += 1;
             }
             Ordering::Equal => {}

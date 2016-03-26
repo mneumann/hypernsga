@@ -122,6 +122,8 @@ pub struct CppnDriver<'a, DOMFIT, G, P, T, NETBUILDER>
     pub random_genome_creator: RandomGenomeCreator,
 }
 
+/// XXX: Driver does not correctly set birth_iteration of offspring genomes!!!!
+/// XXX: wrong calculation of age_diversity
 impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T, NETBUILDER>
     where DOMFIT: DomainFitness<G>,
           G: Sync,
@@ -141,7 +143,7 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
     fn random_genome<R>(&self, rng: &mut R) -> Self::GENOME
         where R: Rng
     {
-        self.random_genome_creator.create::<_, P>(rng)
+        self.random_genome_creator.create::<_, P>(0, rng)
     }
 
     fn fitness(&self, ind: &Self::GENOME) -> Self::FIT {
@@ -161,17 +163,19 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
             behavioral_diversity: 0.0, // will be calculated in `population_metric`
             connection_cost: connection_cost,
             behavior: behavior,
+            age_diversity: 0.0, // will be calculated in `population_metric`
         }
     }
 
     fn mate<R>(&self, rng: &mut R, parent1: &Self::GENOME, parent2: &Self::GENOME) -> Self::GENOME
         where R: Rng
     {
-        self.reproduction.mate(rng, parent1, parent2)
+        // XXX set birth_iteration
+        self.reproduction.mate(rng, parent1, parent2, 0 /* XXX */)
     }
 
     fn population_metric(&self, population: &mut RatedPopulation<Self::GENOME, Self::FIT>) {
-        PopulationFitness.apply(population);
+        PopulationFitness.apply(0 /* XXX */, population);
     }
 }
 
@@ -204,11 +208,11 @@ pub struct RandomGenomeCreator {
 pub type G = CppnGenome<GeometricActivationFunction>;
 
 impl RandomGenomeCreator {
-    pub fn create<R, P>(&self, rng: &mut R) -> G
+    pub fn create<R, P>(&self, iteration: usize, rng: &mut R) -> G
         where R: Rng,
               P: Position
     {
-        let mut genome = G::new();
+        let mut genome = G::new(iteration);
 
         let mut inputs = Vec::new();
         let mut outputs = Vec::new();
@@ -313,10 +317,10 @@ impl Reproduction {
         CppnNode::hidden(af)
     }
 
-    pub fn mate<R>(&self, rng: &mut R, parent1: &G, parent2: &G) -> G
+    pub fn mate<R>(&self, rng: &mut R, parent1: &G, parent2: &G, offspring_iteration: usize) -> G
         where R: Rng
     {
-        let mut offspring = parent1.clone();
+        let mut offspring = parent1.fork(offspring_iteration);
 
         for _ in 0..self.mate_retries + 1 {
             let modified = match MatingMethod::random_with(&self.mating_method_weights, rng) {
@@ -394,7 +398,7 @@ impl Expression {
 pub struct PopulationFitness;
 
 impl PopulationFitness {
-    pub fn apply(&self, population: &mut RatedPopulation<G, Fitness>) {
+    pub fn apply(&self, current_iteration: usize, population: &mut RatedPopulation<G, Fitness>) {
         // Determine the behavioral_diversity as average hamming distance to all other individuals.
         // hamming distance is symmetric.
 
@@ -419,6 +423,19 @@ impl PopulationFitness {
             }
 
             population.fitness_mut(i).behavioral_diversity = diversity_i;
+        }
+
+
+        // Calculate age diversity
+
+        // calculate average age of population.
+        let total_age: usize = population.individuals().iter().map(|ind| ind.genome().age(current_iteration)).sum::<usize>();
+        let avg_age = (total_age as f64) / n as f64;
+
+        // set age_diversity
+        for i in 0..n {
+            let age = population.individuals()[i].genome().age(current_iteration);
+            population.fitness_mut(i).age_diversity = (avg_age - age as f64).abs();
         }
     }
 }

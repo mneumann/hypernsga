@@ -116,7 +116,7 @@ fn main() {
     };
 
     let driver: CppnDriver<_,_,_,Neuron,NeuronNetworkBuilder<Position2d>> = CppnDriver {
-        link_expression_threshold: 0.01,
+        link_expression_range: (0.01, 1000.0),
 
         substrate_configuration: substrate.to_configuration(),
         domain_fitness: &target_opt,

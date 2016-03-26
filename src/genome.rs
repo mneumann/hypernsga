@@ -13,14 +13,35 @@ pub struct Genome<NT: NodeType> {
     /// The genome can contain some nodes which cannot be modified or removed. These are the first
     /// `protected_nodes` in `network`.
     protected_nodes: usize,
+
+    /// Birth iteration 
+    birth_iteration: usize,
 }
 
 impl<NT: NodeType> Genome<NT> {
-    pub fn new() -> Self {
+    pub fn new(birth_iteration: usize) -> Self {
         Genome {
             network: Network::new(),
             protected_nodes: 0,
+            birth_iteration: birth_iteration
         }
+    }
+
+    pub fn fork(&self, birth_iteration: usize) -> Self {
+        Genome {
+            network: self.network.clone(),
+            protected_nodes: self.protected_nodes,
+            birth_iteration: birth_iteration
+        }
+    }
+
+    pub fn age(&self, current_iteration: usize) -> usize {
+        assert!(current_iteration >= self.birth_iteration);
+        current_iteration - self.birth_iteration
+    }
+
+    pub fn birth_iteration(&self) -> usize {
+        self.birth_iteration
     }
 
     pub fn protect_nodes(&mut self) {
