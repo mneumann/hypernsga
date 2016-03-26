@@ -134,6 +134,11 @@ struct State {
     scale_substrate_x: f32,
     scale_substrate_y: f32,
     scale_substrate_z: f32,
+
+    link_expression_min: f32,
+    link_expression_max: f32,
+
+    recalc_fitness: bool,
 }
 
 struct EvoConfig {
@@ -154,21 +159,24 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State) {
     ui.window(im_str!("Evolutionary Graph Optimization"))
       .size((300.0, 100.0), ImGuiSetCond_FirstUseEver)
       .build(|| {
-          if ui.collapsing_header(im_str!("General")).build() {
-              ui.text(im_str!("Iteration: {}", state.iteration));
-              ui.text(im_str!("Best Fitness: {:?}", state.best_fitness));
-              ui.separator();
-              if state.running {
-                  if ui.small_button(im_str!("STOP")) {
-                      state.running = false;
-                  }
-              } else {
-                  if ui.small_button(im_str!("START")) {
-                      state.running = true;
-                  }
+          // if ui.collapsing_header(im_str!("General")).build() {
+          ui.text(im_str!("Iteration: {}", state.iteration));
+          ui.text(im_str!("Best Fitness: {:.3}", state.best_fitness));
+          ui.separator();
+          if state.running {
+              if ui.small_button(im_str!("STOP")) {
+                  state.running = false;
               }
-              ui.separator();
+          } else {
+              if ui.small_button(im_str!("START")) {
+                  state.running = true;
+              }
+          }
+          if ui.small_button(im_str!("Recalc Fitness")) {
+              state.recalc_fitness = true;
+          }
 
+          if ui.collapsing_header(im_str!("History")).build() {
               let num_points = state.best_fitness_history.len();
               unsafe {
                   igPlotLines2(im_str!("performance").as_ptr(),
@@ -176,7 +184,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State) {
                                (state as *mut State) as *mut c_void,
                                num_points as c_int,
                                0 as c_int,
-                               im_str!("overlay text").as_ptr(),
+                               im_str!("Domain Fitness").as_ptr(),
                                0.0 as c_float,
                                1.0 as c_float,
                                ImVec2::new(400.0, 50.0));
@@ -230,6 +238,17 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State) {
           }
 
           if ui.collapsing_header(im_str!("CPPN")).build() {
+              ui.slider_f32(im_str!("Link Expression Min"),
+                            &mut state.link_expression_min,
+                            -1.0,
+                            1.0)
+                .build();
+              ui.slider_f32(im_str!("Link Expression Max"),
+                            &mut state.link_expression_max,
+                            -1.0,
+                            1.0)
+                .build();
+
               ui.slider_f32(im_str!("Link Weight Range (bipolar)"),
                             &mut state.link_weight_range,
                             0.1,
@@ -327,7 +346,9 @@ fn main() {
     {
         let z = 0.75;
         for (x, y) in placement::SunflowerSeed2d::new(node_count.inputs, 0.0) {
-            substrate.add_node(Position3d::new(x, y, z), Neuron::Input, NodeConnectivity::Out);
+            substrate.add_node(Position3d::new(x, y, z),
+                               Neuron::Input,
+                               NodeConnectivity::Out);
         }
     }
 
@@ -406,7 +427,7 @@ fn main() {
         start_initial_nodes: 0,
     };
 
-    let expression = Expression { link_expression_threshold: 0.1 };
+    let mut expression = Expression { link_expression_range: (0.1, 0.5) };
 
     let substrate_config = substrate.to_configuration();
 
@@ -445,6 +466,8 @@ fn main() {
 
     let mut state = State {
         running: true,
+        recalc_fitness: false,
+        // recalc_substrate
         iteration: 0,
         best_fitness: best_fitness,
         mu: evo_config.mu as i32,
@@ -476,6 +499,9 @@ fn main() {
         scale_substrate_x: 0.5,
         scale_substrate_y: 0.5,
         scale_substrate_z: 0.5,
+
+        link_expression_min: expression.link_expression_range.0 as f32,
+        link_expression_max: expression.link_expression_range.1 as f32,
     };
 
     let mut program_substrate: Option<glium::Program> = None;
@@ -649,6 +675,11 @@ fn main() {
             }
             );
 
+            let active = support.update_events();
+            if !active {
+                break;
+            }
+
             evo_config.mu = state.mu as usize;
             evo_config.lambda = state.lambda as usize;
             evo_config.k = state.k as usize;
@@ -671,9 +702,38 @@ fn main() {
             reproduction.link_weight_range = WeightRange::bipolar(state.link_weight_range as f64);
             reproduction.link_weight_creation_sigma = state.link_weight_creation_sigma as f64;
 
-            let active = support.update_events();
-            if !active {
-                break;
+            expression.link_expression_range = (state.link_expression_min as f64,
+                                                state.link_expression_max as f64);
+
+            if state.recalc_fitness {
+                state.recalc_fitness = false;
+                let offspring = parents.into_unrated();
+                let mut next_gen = offspring.rate_in_parallel(&|ind| {
+                                                                  fitness(ind,
+                                                                          &expression,
+                                                                          &substrate_config,
+                                                                          &domain_fitness_eval)
+                                                              },
+                                                              INFINITY);
+
+                PopulationFitness.apply(&mut next_gen);
+                parents = next_gen.select(evo_config.mu,
+                                          evo_config.num_objectives,
+                                          &selection,
+                                          &mut rng);
+
+                best_individual_i = 0;
+                best_fitness = parents.individuals()[best_individual_i].fitness().domain_fitness;
+                for (i, ind) in parents.individuals().iter().enumerate() {
+                    let fitness = ind.fitness().domain_fitness;
+                    if fitness > best_fitness {
+                        best_fitness = fitness;
+                        best_individual_i = i;
+                    }
+                }
+
+                state.best_fitness = best_fitness;
+                state.best_fitness_history.push((state.iteration, state.best_fitness));
             }
         }
 

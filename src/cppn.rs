@@ -30,7 +30,7 @@ const CPPN_OUTPUT_NODE_WEIGHT: usize = 3;
 fn develop_cppn<P, AF, T, V>(cppn: &mut Cppn<CppnNode<AF>, Weight, ()>,
                              substrate_config: &SubstrateConfiguration<P, T>,
                              visitor: &mut V,
-                             leo_threshold: f64)
+                             link_expression_range: (f64, f64))
                              -> (Behavior, f64)
     where P: Position,
           AF: ActivationFunction,
@@ -91,7 +91,7 @@ fn develop_cppn<P, AF, T, V>(cppn: &mut Cppn<CppnNode<AF>, Weight, ()>,
         behavior.bv_link_expression.push(link_expression);
         behavior.bv_link_weight2.push(link_weight2);
 
-        if link_expression > leo_threshold {
+        if link_expression >= link_expression_range.0 && link_expression < link_expression_range.1 {
             let distance_sq = source_node.position.distance_square(&target_node.position);
             debug_assert!(distance_sq >= 0.0);
             connection_cost += distance_sq;
@@ -111,7 +111,8 @@ pub struct CppnDriver<'a, DOMFIT, G, P, T, NETBUILDER>
           NETBUILDER: NetworkBuilder<POS = P, NT = T, Output = G> + Sync,
           G: Sync
 {
-    pub link_expression_threshold: f64,
+    /// express a link if leo is within [min, max)
+    pub link_expression_range: (f64, f64),
 
     pub substrate_configuration: SubstrateConfiguration<P, T>,
     pub domain_fitness: &'a DOMFIT,
@@ -150,7 +151,7 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
         let (behavior, connection_cost) = develop_cppn(&mut cppn,
                                                        &self.substrate_configuration,
                                                        &mut net_builder,
-                                                       self.link_expression_threshold);
+                                                       self.link_expression_range);
 
         // Evaluate domain specific fitness
         let domain_fitness = self.domain_fitness.fitness(net_builder.network());
@@ -370,7 +371,7 @@ impl Reproduction {
 }
 
 pub struct Expression {
-    pub link_expression_threshold: f64,
+    pub link_expression_range: (f64, f64),
 }
 
 impl Expression {
@@ -386,7 +387,7 @@ impl Expression {
         develop_cppn(&mut cppn,
                      substrate_config,
                      net_builder,
-                     self.link_expression_threshold)
+                     self.link_expression_range)
     }
 }
 
