@@ -289,13 +289,20 @@ fn render_cppn(display: &GlutinFacade, target: &mut glium::Frame, genome: &G, ex
         Vertex{position: [0.0, 0.0, 0.0], color: [0.0, 1.0, 0.0]}
     }).collect();
 
+    let mut cppn_node_triangles = Vec::new();
+
     for layer in layers {
         let y = dy.next().unwrap();
         let mut dx = DistributeInterval::new(layer.len(), -1.0, 1.0);
         for nodeidx in layer {
-            let x = dx.next().unwrap();
-            cppn_node_positions[nodeidx].position[0] = x as f32;
-            cppn_node_positions[nodeidx].position[1] = -y as f32;
+            let x = dx.next().unwrap() as f32;
+            let y = -y as f32;
+            cppn_node_positions[nodeidx].position[0] = x;
+            cppn_node_positions[nodeidx].position[1] = y;
+
+            cppn_node_triangles.push(Vertex{position: [x, y+0.01, 0.0], color: [0.0, 1.0, 0.0]});
+            cppn_node_triangles.push(Vertex{position: [x-0.01, y, 0.0], color: [0.0, 1.0, 0.0]});
+            cppn_node_triangles.push(Vertex{position: [x+0.01, y, 0.0], color: [0.0, 1.0, 0.0]});
         }
     }
 
@@ -305,10 +312,39 @@ fn render_cppn(display: &GlutinFacade, target: &mut glium::Frame, genome: &G, ex
         let dst = link_ref.link().target_node_index().index();
         cppn_links.push(src as u32);
         cppn_links.push(dst as u32);
+
+        let src_x = cppn_node_positions[src].position[0];
+        let src_y = cppn_node_positions[src].position[1];
+        let dst_x = cppn_node_positions[dst].position[0];
+        let dst_y = cppn_node_positions[dst].position[1];
+
+        let weight = link_ref.link().weight().0;
+        let color =
+        if weight  >= 0.0 {
+            [0.0, 0.0, 0.0]
+        } else {
+            [1.0, 0.0, 0.0]
+        };
+
+        // line width
+        let lw = 0.01 * weight.abs() as f32;
+
+        cppn_node_triangles.push(Vertex{position: [src_x-lw, src_y, 0.0], color: color});
+        cppn_node_triangles.push(Vertex{position: [src_x+lw, src_y, 0.0], color: color});
+        cppn_node_triangles.push(Vertex{position: [dst_x, dst_y, 0.0], color: color});
+
+        /*
+        cppn_node_triangles.push(Vertex{position: [dst_x-lw, dst_y, 0.0], color: color});
+        cppn_node_triangles.push(Vertex{position: [dst_x+lw, dst_y, 0.0], color: color});
+        cppn_node_triangles.push(Vertex{position: [src_x, src_y, 0.0], color: color});
+        */
+
     });
 
     let vertex_buffer_cppn = glium::VertexBuffer::new(display, &cppn_node_positions).unwrap();
     let cppn_index_buffer = glium::IndexBuffer::new(display, PrimitiveType::LinesList, &cppn_links).unwrap();
+
+    let triangle_buffer = glium::VertexBuffer::new(display, &cppn_node_triangles).unwrap();
 
     let uniforms_cppn = uniform! {
         matrix: [
@@ -320,14 +356,20 @@ fn render_cppn(display: &GlutinFacade, target: &mut glium::Frame, genome: &G, ex
     };
 
     let draw_parameters2 = glium::draw_parameters::DrawParameters {
-        line_width: Some(1.0),
-        point_size: Some(10.0),
+        //line_width: Some(1.0),
+        //point_size: Some(1.0),
+        blend: glium::Blend::alpha_blending(),
+        //multisampling: true,
+        //dithering: true,
+        smooth: Some(glium::draw_parameters::Smooth::Nicest),
         viewport: Some(viewport),
         .. Default::default()
     };
 
-    target.draw(&vertex_buffer_cppn, &glium::index::NoIndices(PrimitiveType::Points), program, &uniforms_cppn, &draw_parameters2).unwrap();
-    target.draw(&vertex_buffer_cppn, &cppn_index_buffer, program, &uniforms_cppn, &draw_parameters2).unwrap();
+    //target.draw(&vertex_buffer_cppn, &glium::index::NoIndices(PrimitiveType::Points), program, &uniforms_cppn, &draw_parameters2).unwrap();
+    //target.draw(&vertex_buffer_cppn, &cppn_index_buffer, program, &uniforms_cppn, &draw_parameters2).unwrap();
+
+    target.draw(&triangle_buffer, &glium::index::NoIndices(PrimitiveType::TrianglesList), program, &uniforms_cppn, &draw_parameters2).unwrap();
 }
 
 
