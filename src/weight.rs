@@ -5,6 +5,12 @@ use rand::distributions::{Normal, IndependentSample};
 #[derive(Debug, Clone, Copy)]
 pub struct Weight(pub f64);
 
+impl Weight {
+    pub fn inv(self) -> Self {
+        Weight(-self.0)
+    }
+}
+
 impl Into<f64> for Weight {
     fn into(self) -> f64 {
         self.0

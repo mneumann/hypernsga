@@ -350,6 +350,15 @@ impl Reproduction {
                     offspring.mutate_connect(link_weight, rng)
                 }
                 MatingMethod::MutateDisconnect => offspring.mutate_disconnect(rng),
+                MatingMethod::MutateSymmetricJoin => offspring.mutate_symmetric_join(rng),
+                MatingMethod::MutateSymmetricFork => offspring.mutate_symmetric_fork(rng),
+                MatingMethod::MutateSymmetricConnect => {
+                    let link_weight =
+                        self.link_weight_range
+                            .clip_weight(Weight(gaussian(self.link_weight_creation_sigma, rng)));
+                    offspring.mutate_symmetric_connect(link_weight, 5 /* XXX */, rng)
+                }
+
                 MatingMethod::MutateWeights => {
                     let modifications = offspring.mutate_weights(self.mutate_element_prob,
                                                                  &self.weight_perturbance,

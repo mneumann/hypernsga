@@ -23,7 +23,7 @@ impl<NT: NodeType> Genome<NT> {
         Genome {
             network: Network::new(),
             protected_nodes: 0,
-            birth_iteration: birth_iteration
+            birth_iteration: birth_iteration,
         }
     }
 
@@ -31,7 +31,7 @@ impl<NT: NodeType> Genome<NT> {
         Genome {
             network: self.network.clone(),
             protected_nodes: self.protected_nodes,
-            birth_iteration: birth_iteration
+            birth_iteration: birth_iteration,
         }
     }
 
@@ -88,7 +88,27 @@ impl<NT: NodeType> Genome<NT> {
         self.network.node_count()
     }
 
-    fn random_node<R>(&self, tournament_k: usize, rng: &mut R) -> Option<NodeIndex>
+    fn random_mindeg_node<R>(&self, tournament_k: usize, start_from: usize, rng: &mut R) -> NodeIndex
+        where R: Rng
+    {
+        assert!(tournament_k > 0);
+
+        let n = self.network.node_count();
+        let mut min_node = NodeIndex::new(rng.gen_range(start_from, n));
+        let mut min_degree = self.network.node(min_node).degree();
+        for _ in 1..tournament_k {
+            let node_idx = NodeIndex::new(rng.gen_range(start_from, n));
+            let degree = self.network.node(node_idx).degree();
+            if degree < min_degree {
+                min_node = node_idx;
+                min_degree = degree;
+            }
+        }
+
+        min_node
+    }
+
+    fn random_unprotected_node<R>(&self, tournament_k: usize, rng: &mut R) -> Option<NodeIndex>
         where R: Rng
     {
         assert!(tournament_k > 0);
@@ -97,19 +117,7 @@ impl<NT: NodeType> Genome<NT> {
         if n <= self.protected_nodes {
             return None;
         }
-
-        let mut min_node = NodeIndex::new(rng.gen_range(self.protected_nodes, n));
-        let mut min_degree = self.network.node(min_node).degree();
-        for _ in 1..tournament_k {
-            let node_idx = NodeIndex::new(rng.gen_range(self.protected_nodes, n));
-            let degree = self.network.node(node_idx).degree();
-            if degree < min_degree {
-                min_node = node_idx;
-                min_degree = degree;
-            }
-        }
-
-        Some(min_node)
+        Some(self.random_mindeg_node(tournament_k, self.protected_nodes, rng))
     }
 
     /// Structural Mutation `AddNode`.
@@ -169,7 +177,7 @@ impl<NT: NodeType> Genome<NT> {
     pub fn mutate_drop_node<R>(&mut self, tournament_k: usize, rng: &mut R) -> bool
         where R: Rng
     {
-        match self.random_node(tournament_k, rng) {
+        match self.random_unprotected_node(tournament_k, rng) {
             None => false,
             Some(node_idx) => {
                 self.network.remove_node(node_idx);
@@ -192,7 +200,7 @@ impl<NT: NodeType> Genome<NT> {
                                  -> bool
         where R: Rng
     {
-        if let Some(node_idx) = self.random_node(tournament_k, rng) {
+        if let Some(node_idx) = self.random_unprotected_node(tournament_k, rng) {
             if self.network.node(node_idx).node_type() != &new_node_type {
                 self.network.node_mut(node_idx).set_node_type(new_node_type);
                 return true;
@@ -221,6 +229,111 @@ impl<NT: NodeType> Genome<NT> {
             }
         }
     }
+
+    /// Structural Mutation `Symmetric Join`.
+    ///
+    /// Given a connection between A -> B, this will try to add
+    /// a second connection A' -> B with negative weight of A -> B.
+    ///
+    /// Return `true` if the genome was modified. Otherwise `false`.
+
+    pub fn mutate_symmetric_join<R>(&mut self, rng: &mut R) -> bool
+        where R: Rng
+    {
+        let link_index = match self.network.random_link_index(rng) {
+            Some(idx) => idx,
+            None => return false,
+        };
+
+        let (source_node, target_node, weight) = {
+            let link = self.network.link(link_index);
+            (link.source_node_index(),
+             link.target_node_index(),
+             link.weight())
+        };
+
+        for i in 0..self.network.node_count() {
+            let node_idx = NodeIndex::new(i);
+            if node_idx != source_node && node_idx != target_node {
+                if self.network.valid_link(node_idx, target_node).is_ok() && !self.network.link_would_cycle(node_idx, target_node) {
+                    self.add_link(node_idx, target_node, weight.inv());
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// Structural Mutation `Symmetric Fork`.
+    ///
+    /// Given a connection between A -> B, this will try to add
+    /// a second connection A -> B' with negative weight of A -> B.
+    ///
+    /// Return `true` if the genome was modified. Otherwise `false`.
+
+    pub fn mutate_symmetric_fork<R>(&mut self, rng: &mut R) -> bool
+        where R: Rng
+    {
+        let link_index = match self.network.random_link_index(rng) {
+            Some(idx) => idx,
+            None => return false,
+        };
+
+        let (source_node, target_node, weight) = {
+            let link = self.network.link(link_index);
+            (link.source_node_index(),
+             link.target_node_index(),
+             link.weight())
+        };
+
+        for i in 0..self.network.node_count() {
+            let node_idx = NodeIndex::new(i);
+            if node_idx != source_node && node_idx != target_node {
+                if self.network.valid_link(source_node, node_idx).is_ok() && !self.network.link_would_cycle(source_node, node_idx) {
+                    self.add_link(source_node, node_idx, weight.inv());
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+
+    /// Structural Mutation `Symmetric Connect`.
+    ///
+    /// Mutate the genome by adding two random links to the same node with
+    /// symmetric weights (-weight, +weight) which does not introduce a cycle.
+    ///
+    /// Return `true` if the genome was modified. Otherwise `false`.
+
+    pub fn mutate_symmetric_connect<R>(&mut self, link_weight: Weight, retries: usize, rng: &mut R) -> bool
+        where R: Rng
+    {
+        match self.network.find_random_unconnected_link_no_cycle(rng) {
+            Some((node1, node2)) => {
+                // node1 and node2 are neither directly connected, nor do they form a
+                // cycle when connected.
+                // find a third node node3, which is neither connected to node1 nor node2.
+
+                for _ in 0..retries {
+                    let node3 = self.random_mindeg_node(3, 0, rng);
+                    if self.network.valid_link(node1, node3).is_ok() &&
+                       self.network.valid_link(node2, node3).is_ok() &&
+                        !self.network.link_would_cycle(node1, node3) &&
+                        !self.network.link_would_cycle(node2, node3) {
+                        self.add_link(node1, node3, link_weight);
+                        self.add_link(node2, node3, link_weight.inv());
+                        return true;
+                    }
+                }
+            }
+            _ => {}
+        }
+        return false;
+    }
+
 
     /// Structural Mutation `Disconnect`.
     ///

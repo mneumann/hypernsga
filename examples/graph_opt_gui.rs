@@ -168,6 +168,9 @@ struct State {
     mutate_modify_node: i32,
     mutate_connect: i32,
     mutate_disconnect: i32,
+    mutate_symmetric_join: i32,
+    mutate_symmetric_fork: i32,
+    mutate_symmetric_connect: i32,
     mutate_weights: i32,
 
     mutate_element_prob: f32,
@@ -372,6 +375,9 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                     .build();
                 ui.slider_i32(im_str!("Connect"), &mut state.mutate_connect, 0, 100).build();
                 ui.slider_i32(im_str!("Disconnect"), &mut state.mutate_disconnect, 0, 100).build();
+                ui.slider_i32(im_str!("Sym Join"), &mut state.mutate_symmetric_join, 0, 100).build();
+                ui.slider_i32(im_str!("Sym Fork"), &mut state.mutate_symmetric_fork, 0, 100).build();
+                ui.slider_i32(im_str!("Sym Connect"), &mut state.mutate_symmetric_connect, 0, 100).build();
             }
 
             // ui.separator();
@@ -478,6 +484,9 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                 mutate_modify_node: 1,
                 mutate_connect: 20,
                 mutate_disconnect: 20,
+                mutate_symmetric_join: 10,
+                mutate_symmetric_fork: 10,
+                mutate_symmetric_connect: 1,
                 mutate_weights: 100,
                 crossover_weights: 0,
             },
@@ -569,6 +578,11 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
             mutate_modify_node: reproduction.mating_method_weights.mutate_modify_node as i32,
             mutate_connect: reproduction.mating_method_weights.mutate_connect as i32,
             mutate_disconnect: reproduction.mating_method_weights.mutate_disconnect as i32,
+
+            mutate_symmetric_join: reproduction.mating_method_weights.mutate_symmetric_join as i32,
+            mutate_symmetric_fork: reproduction.mating_method_weights.mutate_symmetric_fork as i32,
+            mutate_symmetric_connect: reproduction.mating_method_weights.mutate_symmetric_connect as i32,
+
             mutate_weights: reproduction.mating_method_weights.mutate_weights as i32,
 
             best_fitness_history: vec![(0, best_fitness)],
@@ -806,6 +820,11 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                 reproduction.mating_method_weights.mutate_modify_node = state.mutate_modify_node as u32;
                 reproduction.mating_method_weights.mutate_connect = state.mutate_connect as u32;
                 reproduction.mating_method_weights.mutate_disconnect = state.mutate_disconnect as u32;
+
+                reproduction.mating_method_weights.mutate_symmetric_join = state.mutate_symmetric_join as u32;
+                reproduction.mating_method_weights.mutate_symmetric_fork = state.mutate_symmetric_fork as u32;
+                reproduction.mating_method_weights.mutate_symmetric_connect = state.mutate_symmetric_connect as u32;
+
                 reproduction.mating_method_weights.mutate_weights = state.mutate_weights as u32;
                 domain_fitness_eval.edge_score = state.nm_edge_score;
                 domain_fitness_eval.iters = state.nm_iters as usize;

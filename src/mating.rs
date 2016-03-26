@@ -10,6 +10,10 @@ pub enum MatingMethod {
     MutateConnect,
     MutateDisconnect,
 
+    MutateSymmetricJoin,
+    MutateSymmetricFork,
+    MutateSymmetricConnect,
+
     // Mutation of weights
     MutateWeights,
 
@@ -25,6 +29,9 @@ pub struct MatingMethodWeights {
     pub mutate_connect: u32,
     pub mutate_disconnect: u32,
     pub mutate_weights: u32,
+    pub mutate_symmetric_join: u32,
+    pub mutate_symmetric_fork: u32,
+    pub mutate_symmetric_connect: u32,
     pub crossover_weights: u32,
 }
 
@@ -48,11 +55,24 @@ impl MatingMethod {
                              weight: p.mutate_connect,
                              item: MatingMethod::MutateConnect,
                          },
-
                          Weighted {
                              weight: p.mutate_disconnect,
                              item: MatingMethod::MutateDisconnect,
                          },
+
+                         Weighted {
+                             weight: p.mutate_symmetric_join,
+                             item: MatingMethod::MutateSymmetricJoin,
+                         },
+                         Weighted {
+                             weight: p.mutate_symmetric_fork,
+                             item: MatingMethod::MutateSymmetricFork,
+                         },
+                         Weighted {
+                             weight: p.mutate_symmetric_connect,
+                             item: MatingMethod::MutateSymmetricConnect,
+                         },
+
                          Weighted {
                              weight: p.mutate_weights,
                              item: MatingMethod::MutateWeights,
