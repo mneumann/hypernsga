@@ -88,7 +88,11 @@ impl<NT: NodeType> Genome<NT> {
         self.network.node_count()
     }
 
-    fn random_mindeg_node<R>(&self, tournament_k: usize, start_from: usize, rng: &mut R) -> NodeIndex
+    fn random_mindeg_node<R>(&self,
+                             tournament_k: usize,
+                             start_from: usize,
+                             rng: &mut R)
+                             -> NodeIndex
         where R: Rng
     {
         assert!(tournament_k > 0);
@@ -255,7 +259,9 @@ impl<NT: NodeType> Genome<NT> {
         for i in 0..self.network.node_count() {
             let node_idx = NodeIndex::new(i);
             if node_idx != source_node && node_idx != target_node {
-                if self.network.valid_link(node_idx, target_node).is_ok() && !self.network.link_would_cycle(node_idx, target_node) {
+                if self.network.valid_link(node_idx, target_node).is_ok() &&
+                   !self.network.has_link(node_idx, target_node) &&
+                   !self.network.link_would_cycle(node_idx, target_node) {
                     self.add_link(node_idx, target_node, weight.inv());
                     return true;
                 }
@@ -290,7 +296,9 @@ impl<NT: NodeType> Genome<NT> {
         for i in 0..self.network.node_count() {
             let node_idx = NodeIndex::new(i);
             if node_idx != source_node && node_idx != target_node {
-                if self.network.valid_link(source_node, node_idx).is_ok() && !self.network.link_would_cycle(source_node, node_idx) {
+                if self.network.valid_link(source_node, node_idx).is_ok() &&
+                   !self.network.has_link(source_node, node_idx) &&
+                   !self.network.link_would_cycle(source_node, node_idx) {
                     self.add_link(source_node, node_idx, weight.inv());
                     return true;
                 }
@@ -308,7 +316,11 @@ impl<NT: NodeType> Genome<NT> {
     ///
     /// Return `true` if the genome was modified. Otherwise `false`.
 
-    pub fn mutate_symmetric_connect<R>(&mut self, link_weight: Weight, retries: usize, rng: &mut R) -> bool
+    pub fn mutate_symmetric_connect<R>(&mut self,
+                                       link_weight: Weight,
+                                       retries: usize,
+                                       rng: &mut R)
+                                       -> bool
         where R: Rng
     {
         match self.network.find_random_unconnected_link_no_cycle(rng) {
@@ -321,8 +333,10 @@ impl<NT: NodeType> Genome<NT> {
                     let node3 = self.random_mindeg_node(3, 0, rng);
                     if self.network.valid_link(node1, node3).is_ok() &&
                        self.network.valid_link(node2, node3).is_ok() &&
-                        !self.network.link_would_cycle(node1, node3) &&
-                        !self.network.link_would_cycle(node2, node3) {
+                       !self.network.has_link(node1, node3) &&
+                       !self.network.has_link(node2, node3) &&
+                       !self.network.link_would_cycle(node1, node3) &&
+                       !self.network.link_would_cycle(node2, node3) {
                         self.add_link(node1, node3, link_weight);
                         self.add_link(node2, node3, link_weight.inv());
                         return true;
