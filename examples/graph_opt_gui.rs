@@ -654,13 +654,13 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
         }
 
         let mut evo_config = EvoConfig {
-            mu: 100,
-            lambda: 200,
-            k: 2,
+            mu: 200,
+            lambda: 100,
+            k: 5,
             objectives: vec![0,1,2,3,4,5],
         };
 
-        let mut selection = SelectNSGPMod { objective_eps: 0.01 };
+        let mut selection = SelectNSGP { objective_eps: 0.01 };
 
         let weight_perturbance_sigma = 0.1;
         let link_weight_range = 1.0;
