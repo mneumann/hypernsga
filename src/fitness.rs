@@ -42,8 +42,6 @@ pub struct Fitness {
 }
 
 impl MultiObjective for Fitness {
-    const NUM_OBJECTIVES: usize = 4;
-
     fn cmp_objective(&self, other: &Self, objective: usize) -> Ordering {
         match objective {
             // higher domain_fitness is better!
@@ -72,54 +70,22 @@ impl MultiObjective for Fitness {
 }
 
 impl Domination for Fitness {
-    fn domination_ord(&self, rhs: &Fitness) -> Ordering {
+    fn domination_ord(&self, rhs: &Fitness, objectives: &[usize]) -> Ordering {
         let lhs = self;
 
         let mut left_dom_cnt = 0;
         let mut right_dom_cnt = 0;
 
-        match lhs.domain_fitness.partial_cmp(&rhs.domain_fitness).unwrap() {
-            Ordering::Greater => {
-                // higher values are better
-                left_dom_cnt += 1;
+        for &i in objectives.iter() {
+            match lhs.cmp_objective(rhs, i) {
+                Ordering::Less => {
+                    left_dom_cnt += 1;
+                }
+                Ordering::Greater => {
+                    right_dom_cnt += 1;
+                }
+                Ordering::Equal => {}
             }
-            Ordering::Less => {
-                right_dom_cnt += 1;
-            }
-            Ordering::Equal => {}
-        }
-
-        match lhs.behavioral_diversity.partial_cmp(&rhs.behavioral_diversity).unwrap() {
-            Ordering::Greater => {
-                // higher values are better
-                left_dom_cnt += 1;
-            }
-            Ordering::Less => {
-                right_dom_cnt += 1;
-            }
-            Ordering::Equal => {}
-        }
-
-        match lhs.connection_cost.partial_cmp(&rhs.connection_cost).unwrap() {
-            Ordering::Less => {
-                // smaller values are better
-                left_dom_cnt += 1;
-            }
-            Ordering::Greater => {
-                right_dom_cnt += 1;
-            }
-            Ordering::Equal => {}
-        }
-
-        match lhs.age_diversity.partial_cmp(&rhs.age_diversity).unwrap() {
-            Ordering::Greater => {
-                // higher values are better
-                left_dom_cnt += 1;
-            }
-            Ordering::Less => {
-                right_dom_cnt += 1;
-            }
-            Ordering::Equal => {}
         }
 
         if left_dom_cnt > 0 && right_dom_cnt == 0 {

@@ -146,7 +146,7 @@ struct EvoConfig {
     mu: usize,
     lambda: usize,
     k: usize,
-    num_objectives: usize,
+    objectives: Vec<usize>,
 }
 
 extern "C" fn values_getter(data: *mut c_void, idx: c_int) -> c_float {
@@ -388,7 +388,7 @@ fn main() {
         mu: 100,
         lambda: 200,
         k: 2,
-        num_objectives: 4,
+        objectives: vec![0,1,2,3],
     };
 
     let mut selection = SelectNSGP { objective_eps: 0.01 };
@@ -462,7 +462,7 @@ fn main() {
         PopulationFitness.apply(0, &mut rated);
 
         rated.select(evo_config.mu,
-                     evo_config.num_objectives,
+                     &evo_config.objectives,
                      &selection,
                      &mut rng)
     };
@@ -732,7 +732,7 @@ fn main() {
 
                 PopulationFitness.apply(state.iteration, &mut next_gen);
                 parents = next_gen.select(evo_config.mu,
-                                          evo_config.num_objectives,
+                                          &evo_config.objectives,
                                           &selection,
                                           &mut rng);
 
@@ -768,7 +768,7 @@ fn main() {
             let mut next_gen = parents.merge(rated_offspring);
             PopulationFitness.apply(state.iteration, &mut next_gen);
             parents = next_gen.select(evo_config.mu,
-                                      evo_config.num_objectives,
+                                      &evo_config.objectives,
                                       &selection,
                                       &mut rng);
 
