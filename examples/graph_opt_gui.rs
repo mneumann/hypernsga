@@ -25,7 +25,7 @@ use hypernsga::substrate::{Node, Substrate, SubstrateConfiguration, Position, Po
                            Position2d, NodeConnectivity};
 use hypernsga::placement;
 use hypernsga::distribute::DistributeInterval;
-use nsga2::selection::SelectNSGP;
+use nsga2::selection::{SelectNSGP,SelectNSGPMod};
 use nsga2::population::{UnratedPopulation, RatedPopulation, RankedPopulation};
 use nsga2::multi_objective::MultiObjective;
 use std::f64::INFINITY;
@@ -400,7 +400,7 @@ fn main() {
         objectives: vec![0,1,2,3],
     };
 
-    let mut selection = SelectNSGP { objective_eps: 0.01 };
+    let mut selection = SelectNSGPMod { objective_eps: 0.01 };
 
     let weight_perturbance_sigma = 0.1;
     let link_weight_range = 1.0;
