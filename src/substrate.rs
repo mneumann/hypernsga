@@ -23,6 +23,12 @@ fn test_nodeset() {
     assert_eq!(2, NodeSet::single(1).0);
     assert_eq!(4, NodeSet::single(2).0);
     assert_eq!(8, NodeSet::single(3).0);
+    assert_eq!(true, NodeSet::single(0).has_intersection(&NodeSet::single(0)));
+    assert_eq!(false, NodeSet::single(0).has_intersection(&NodeSet::single(1)));
+    assert_eq!(false, NodeSet::single(0).has_intersection(&NodeSet::single(2)));
+    assert_eq!(true, NodeSet::single(1).has_intersection(&NodeSet::single(1)));
+    assert_eq!(false, NodeSet::single(1).has_intersection(&NodeSet::single(0)));
+    assert_eq!(false, NodeSet::single(1).has_intersection(&NodeSet::single(2)));
 }
 
 

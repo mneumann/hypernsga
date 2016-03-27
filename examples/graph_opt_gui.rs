@@ -382,7 +382,8 @@ fn render_cppn(display: &GlutinFacade, target: &mut glium::Frame, genome: &G, ex
         let dst_y = cppn_node_positions[dst].position[1];
 
         let weight = link_ref.link().weight().0 as f32;
-        assert!(weight.abs() <= 1.0); // XXX
+        //assert!(weight.abs() <= 1.0); // XXX
+        let weight = weight.abs().min(1.0);
         let wa = (weight.abs()/2.0)+0.5;
         let color =
             if weight >= 0.0 {
@@ -714,10 +715,10 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
 
         // Hidden
         {
-            let z = 0.0;
+            let z = 0.5;
             //let y = 0.0;
             //for x in DistributeInterval::new(node_count.inputs, -1.0 * node_count.hidden as f64 / 2.0, 1.0 * node_count.hidden as f64 / 2.0) {
-            for x in DistributeInterval::new(node_count.inputs, -1.0, 1.0) {
+            for x in DistributeInterval::new(node_count.hidden, -1.0, 1.0) {
                 //let y = (1.0 - x.powi(8));
                 let y = -1.0;
                 substrate.add_node(Position3d::new(x, y, z),
