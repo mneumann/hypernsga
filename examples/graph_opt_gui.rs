@@ -21,8 +21,7 @@ use hypernsga::fitness::{Fitness, DomainFitness};
 use hypernsga::mating::MatingMethodWeights;
 use hypernsga::prob::Prob;
 use hypernsga::weight::{WeightPerturbanceMethod, WeightRange};
-use hypernsga::substrate::{Node, Substrate, SubstrateConfiguration, Position, Position3d,
-Position2d, NodeConnectivity};
+use hypernsga::substrate::{Node, NodeSet, Substrate, SubstrateConfiguration, Position, Position3d, Position2d};
 use hypernsga::placement;
 use hypernsga::distribute::DistributeInterval;
 use nsga2::selection::{SelectNSGP,SelectNSGPMod};
@@ -680,8 +679,13 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
         // XXX
         let mut substrate: Substrate<Position3d, Neuron> = Substrate::new();
         let node_count = domain_fitness_eval.target_graph_node_count();
-
         println!("{:?}", node_count);
+
+        let input_nodeset = NodeSet::single(0);
+        let hidden_nodeset = NodeSet::single(1);
+        let output_nodeset = NodeSet::single(2);
+
+        let nodeset_links = &[(input_nodeset, hidden_nodeset), (hidden_nodeset, output_nodeset), (input_nodeset, output_nodeset)];
 
         // Input layer
         {
@@ -691,7 +695,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                 let y = 0.0; //0.1 * (1.0 - x.powi(8));
                 substrate.add_node(Position3d::new(x, y, z),
                 Neuron::Input,
-                NodeConnectivity::Out);
+                input_nodeset);
             }
         }
 
@@ -704,7 +708,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                 let y = 0.0;
                 substrate.add_node(Position3d::new(x, y, z),
                 Neuron::Hidden,
-                NodeConnectivity::InOut);
+                hidden_nodeset);
             }
         }
 
@@ -719,7 +723,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                 //substrate.add_node(Position3d::new(x, y, -z.next().unwrap()),
                 substrate.add_node(Position3d::new(x, y, z),
                 Neuron::Output,
-                NodeConnectivity::In);
+                output_nodeset);
             }
         }
 
@@ -785,7 +789,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
 
         let mut expression = Expression { link_expression_range: (0.1, 0.5) };
 
-        let substrate_config = substrate.to_configuration();
+        let substrate_config = substrate.to_configuration(nodeset_links);
 
         // create `generation 0`
         let mut parents = {
