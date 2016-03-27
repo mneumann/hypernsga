@@ -215,6 +215,9 @@ struct State {
 
     action: Action,
     view: ViewMode,
+
+    global_mutation_rate: f32,
+    global_element_mutation: f32,
 }
 
 struct EvoConfig {
@@ -612,7 +615,19 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                 ui.slider_i32(im_str!("Sym Fork"), &mut state.mutate_symmetric_fork, 0, 100).build();
                 ui.slider_i32(im_str!("Sym Connect"), &mut state.mutate_symmetric_connect, 0, 100).build();
             }
+            if ui.collapsing_header(im_str!("Global Mutation")).build() {
+                ui.slider_f32(im_str!("Global Mutation Rate"), &mut state.global_mutation_rate,
+                0.0,
+                1.0)
+                    .build();
+                ui.slider_f32(im_str!("Element Mutation Rate"), &mut state.global_element_mutation,
+                0.0,
+                1.0)
+                    .build();
 
+            }
+
+ 
             // ui.separator();
             // let mouse_pos = ui.imgui().mouse_pos();
             // ui.text(im_str!("Mouse Position: ({:.1},{:.1})", mouse_pos.0, mouse_pos.1));
@@ -801,7 +816,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
         }
 
         let mut state = State {
-            running: true,
+            running: false,
             recalc_fitness: false,
             // recalc_substrate
             iteration: 0,
@@ -852,7 +867,10 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
             objectives_use_complexity: true,
 
             action: Action::None,
-            view: ViewMode::BestDetailed
+            view: ViewMode::BestDetailed,
+
+            global_mutation_rate: 0.0,
+            global_element_mutation: 0.0,
         };
 
         let mut program_substrate: Option<glium::Program> = None;
@@ -1123,14 +1141,43 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                                                   evo_config.lambda,
                                                   evo_config.k,
                                                   &|rng, p1, p2| reproduction.mate(rng, p1, p2, state.iteration));
-                let rated_offspring = offspring.rate_in_parallel(&|ind| {
-                    fitness(ind,
-                            &expression,
-                            &substrate_config,
-                            &domain_fitness_eval)
-                },
-                INFINITY);
-                let mut next_gen = parents.merge(rated_offspring);
+                let mut next_gen = 
+                if state.global_mutation_rate > 0.0 {
+                    // mutate all individuals of the whole population.
+                    // XXX: Optimize
+                    let old = parents.into_unrated().merge(offspring);
+                    let mut new_unrated = UnratedPopulation::new();
+                    let prob = Prob::new(state.global_mutation_rate);
+                    for ind in old.as_vec().into_iter() {
+                        // mutate each in
+                        let mut genome = ind.into_genome();
+                        if prob.flip(&mut rng) {
+                            // mutate that genome
+                            genome.mutate_weights(Prob::new(state.global_element_mutation),
+                                &reproduction.weight_perturbance,
+                                &reproduction.link_weight_range,
+                                &mut rng);
+                        }
+                        new_unrated.push(genome);
+                    }
+                    new_unrated.rate_in_parallel(&|ind| {
+                        fitness(ind,
+                                &expression,
+                                &substrate_config,
+                                &domain_fitness_eval)
+                    },
+                    INFINITY)
+                } else {
+                    // no global mutation.
+                    let rated_offspring = offspring.rate_in_parallel(&|ind| {
+                        fitness(ind,
+                                &expression,
+                                &substrate_config,
+                                &domain_fitness_eval)
+                    },
+                    INFINITY);
+                    parents.merge(rated_offspring)
+                };
                 PopulationFitness.apply(state.iteration, &mut next_gen);
                 parents = next_gen.select(evo_config.mu,
                                           &evo_config.objectives,
