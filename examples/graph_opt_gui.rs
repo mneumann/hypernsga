@@ -241,7 +241,7 @@ extern "C" fn values_getter(data: *mut c_void, idx: c_int) -> c_float {
 }
 
 fn render_graph(display: &GlutinFacade, target: &mut glium::Frame, genome: &G, expression: &Expression, program: &glium::Program, state: &State,
-                substrate_config: &SubstrateConfiguration<Position3d, Neuron>, viewport: glium::Rect) {
+                substrate_config: &SubstrateConfiguration<Position3d, Neuron>, viewport: glium::Rect, line_width: f32, point_size: f32) {
     let mut network_builder = VizNetworkBuilder::new();
     let (_, _, _) = expression.express(&genome,
                                        &mut network_builder,
@@ -279,7 +279,7 @@ fn render_graph(display: &GlutinFacade, target: &mut glium::Frame, genome: &G, e
     };
 
     let draw_parameters_substrate = glium::draw_parameters::DrawParameters {
-        line_width: Some(2.0),
+        line_width: Some(line_width),
         blend: glium::Blend::alpha_blending(),
         smooth: Some(glium::draw_parameters::Smooth::Nicest),
         viewport: Some(viewport),
@@ -290,7 +290,7 @@ fn render_graph(display: &GlutinFacade, target: &mut glium::Frame, genome: &G, e
     target.draw(&vertex_buffer, &line_index_buffer, program, &uniforms_substrate, &draw_parameters_substrate).unwrap();
 
     let draw_parameters_substrate = glium::draw_parameters::DrawParameters {
-        point_size: Some(5.0),
+        point_size: Some(point_size),
         viewport: Some(viewport),
         .. Default::default()
     };
@@ -943,7 +943,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                             let (substrate_width, substrate_height) = (400, 400);
 
                             render_graph(display, target, best_ind.genome(), &expression, program_substrate.as_ref().unwrap(), &state, &substrate_config,
-                            glium::Rect {left: 0, bottom: 0, width: substrate_width, height: substrate_height});
+                            glium::Rect {left: 0, bottom: 0, width: substrate_width, height: substrate_height}, 2.0, 5.0);
 
 
                             render_cppn(display, target, best_ind.genome(), &expression, program_vertex.as_ref().unwrap(), &state, &substrate_config,
@@ -981,7 +981,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                                     }
                                     let rect = glium::Rect {left: x*width/10, bottom: y*height/10, width: width/10, height: height/10};
                                     let genome = indiv[indices[i]].genome();
-                                    render_graph(display, target, genome, &expression, program_substrate.as_ref().unwrap(), &state, &substrate_config, rect);
+                                    render_graph(display, target, genome, &expression, program_substrate.as_ref().unwrap(), &state, &substrate_config, rect, 1.0, 2.5);
                                     i += 1;
                                 }
                             }
@@ -1010,7 +1010,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                                     if let ViewMode::CppnOverview = state.view {
                                         render_cppn(display, target, genome, &expression, program_vertex.as_ref().unwrap(), &state, &substrate_config, rect);
                                     } else {
-                                        render_graph(display, target, genome, &expression, program_substrate.as_ref().unwrap(), &state, &substrate_config, rect);
+                                        render_graph(display, target, genome, &expression, program_substrate.as_ref().unwrap(), &state, &substrate_config, rect, 1.0, 2.5);
                                     }
                                     i += 1;
                                 }
