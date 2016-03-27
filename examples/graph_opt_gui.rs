@@ -245,7 +245,7 @@ fn render_graph(display: &GlutinFacade, target: &mut glium::Frame, genome: &G, e
                                        &substrate_config);
 
     let vertex_buffer = glium::VertexBuffer::new(display, &network_builder.point_list).unwrap();
-    let point_index_buffer = glium::index::NoIndices(PrimitiveType::Points);
+
     let line_index_buffer  = glium::IndexBuffer::new(display, PrimitiveType::LinesList,
                                                      &network_builder.link_index_list).unwrap();
 
@@ -276,17 +276,24 @@ fn render_graph(display: &GlutinFacade, target: &mut glium::Frame, genome: &G, e
     };
 
     let draw_parameters_substrate = glium::draw_parameters::DrawParameters {
-        line_width: Some(1.0),
-        point_size: Some(10.0),
-        //blend: glium::Blend::alpha_blending(),
-        //smooth: Some(glium::draw_parameters::Smooth::Nicest),
+        line_width: Some(2.0),
+        blend: glium::Blend::alpha_blending(),
+        smooth: Some(glium::draw_parameters::Smooth::Nicest),
         viewport: Some(viewport),
         .. Default::default()
     };
 
     // substrate
-    target.draw(&vertex_buffer, &point_index_buffer, program, &uniforms_substrate, &draw_parameters_substrate).unwrap();
     target.draw(&vertex_buffer, &line_index_buffer, program, &uniforms_substrate, &draw_parameters_substrate).unwrap();
+
+    let draw_parameters_substrate = glium::draw_parameters::DrawParameters {
+        point_size: Some(5.0),
+        viewport: Some(viewport),
+        .. Default::default()
+    };
+
+    let point_index_buffer = glium::index::NoIndices(PrimitiveType::Points);
+    target.draw(&vertex_buffer, &point_index_buffer, program, &uniforms_substrate, &draw_parameters_substrate).unwrap();
 }
 
 fn render_cppn(display: &GlutinFacade, target: &mut glium::Frame, genome: &G, expression: &Expression, program: &glium::Program, state: &State,
