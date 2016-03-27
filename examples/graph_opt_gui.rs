@@ -217,6 +217,9 @@ struct State {
 
     global_mutation_rate: f32,
     global_element_mutation: f32,
+
+    auto_reset: i32,
+    auto_reset_enable: bool,
 }
 
 struct EvoConfig {
@@ -226,7 +229,7 @@ struct EvoConfig {
     objectives: Vec<usize>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Action {
     None,
     ExportBest,
@@ -443,45 +446,50 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                     state.running = true;
                 }
             }
-            if ui.small_button(im_str!("Recalc Fitness")) {
-                state.recalc_fitness = true;
-            }
-            if ui.small_button(im_str!("Export Best")) {
-                state.action = Action::ExportBest;
-            }
-            if ui.small_button(im_str!("Reset")) {
-                state.action = Action::ResetNet;
-            }
 
-            let views = im_str!("detailed\0multi cppn\0multi graph\0overview\0");
-            let mut current: c_int = match state.view {
-                ViewMode::BestDetailed => {
-                    0
+            if ui.collapsing_header(im_str!("General")).build() {
+                if ui.small_button(im_str!("Recalc Fitness")) {
+                    state.recalc_fitness = true;
                 }
-                ViewMode::CppnOverview => {
-                    1
+                if ui.small_button(im_str!("Export Best")) {
+                    state.action = Action::ExportBest;
                 }
-                ViewMode::GraphOverview => {
-                    2
+                if ui.small_button(im_str!("Reset")) {
+                    state.action = Action::ResetNet;
                 }
-                ViewMode::Overview => {
-                    3
-                }
+                ui.checkbox(im_str!("Enable Autoreset"), &mut state.auto_reset_enable);
+                ui.slider_i32(im_str!("Autoreset after"), &mut state.auto_reset, 100, 10000).build();
 
-            };
-            unsafe {
-                if igCombo2(im_str!("view").as_ptr(), &mut current as *mut c_int, views.as_ptr(), 4) {
-                    if current == 0 {
-                        state.view = ViewMode::BestDetailed;
-                    } else if current == 1 {
-                        state.view = ViewMode::CppnOverview;
-                    } else if current == 2 {
-                        state.view = ViewMode::GraphOverview;
-                    } else if current == 3 {
-                        state.view = ViewMode::Overview;
+                let views = im_str!("detailed\0multi cppn\0multi graph\0overview\0");
+                let mut current: c_int = match state.view {
+                    ViewMode::BestDetailed => {
+                        0
+                    }
+                    ViewMode::CppnOverview => {
+                        1
+                    }
+                    ViewMode::GraphOverview => {
+                        2
+                    }
+                    ViewMode::Overview => {
+                        3
                     }
 
+                };
+                unsafe {
+                    if igCombo2(im_str!("view").as_ptr(), &mut current as *mut c_int, views.as_ptr(), 4) {
+                        if current == 0 {
+                            state.view = ViewMode::BestDetailed;
+                        } else if current == 1 {
+                            state.view = ViewMode::CppnOverview;
+                        } else if current == 2 {
+                            state.view = ViewMode::GraphOverview;
+                        } else if current == 3 {
+                            state.view = ViewMode::Overview;
+                        }
 
+
+                    }
                 }
             }
 
@@ -711,7 +719,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
             //for x in DistributeInterval::new(node_count.inputs, -1.0 * node_count.hidden as f64 / 2.0, 1.0 * node_count.hidden as f64 / 2.0) {
             for x in DistributeInterval::new(node_count.inputs, -1.0, 1.0) {
                 //let y = (1.0 - x.powi(8));
-                let y = 0.0;
+                let y = -1.0;
                 substrate.add_node(Position3d::new(x, y, z),
                 Neuron::Hidden,
                 hidden_nodeset);
@@ -832,7 +840,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
         }
 
         let mut state = State {
-            running: false,
+            running: true,
             recalc_fitness: false,
             // recalc_substrate
             iteration: 0,
@@ -887,6 +895,9 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
 
             global_mutation_rate: 0.0,
             global_element_mutation: 0.0,
+
+            auto_reset: 250,
+            auto_reset_enable: false,
         };
 
         let mut program_substrate: Option<glium::Program> = None;
@@ -1045,6 +1056,13 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                 let active = support.update_events();
                 if !active {
                     break;
+                }
+
+                if state.running && state.auto_reset_enable && state.action == Action::None {
+                    if state.iteration > state.auto_reset as usize {
+                        println!("Autoreset at {}", state.iteration);
+                        state.action = Action::ResetNet;
+                    }
                 }
 
                 match state.action {

@@ -127,7 +127,7 @@ fn develop_cppn<P, AF, T, V>(cppn: &mut Cppn<CppnNode<AF>, Weight, ()>,
         behavior.bv_link_expression.push(link_expression);
         behavior.bv_link_weight2.push(link_weight2);
 
-        if link_expression >= link_expression_range.0 && link_expression < link_expression_range.1 {
+        if link_expression >= link_expression_range.0 && link_expression <= link_expression_range.1 {
             let distance_sq = source_node.position.distance_square(&target_node.position);
             debug_assert!(distance_sq >= 0.0);
             connection_cost += distance_sq;
@@ -147,7 +147,7 @@ pub struct CppnDriver<'a, DOMFIT, G, P, T, NETBUILDER>
           NETBUILDER: NetworkBuilder<POS = P, NT = T, Output = G> + Sync,
           G: Sync
 {
-    /// express a link if leo is within [min, max)
+    /// express a link if leo is within [min, max]
     pub link_expression_range: (f64, f64),
 
     pub substrate_configuration: SubstrateConfiguration<P, T>,
@@ -271,10 +271,10 @@ impl RandomGenomeCreator {
         inputs.push(bias);
 
         // 4 outputs (t,ex,w,r)
-        let out_t = genome.add_node(CppnNode::output(GeometricActivationFunction::BipolarGaussian));
-        let out_ex = genome.add_node(CppnNode::output(GeometricActivationFunction::Linear));
-        let out_w = genome.add_node(CppnNode::output(GeometricActivationFunction::BipolarGaussian));
-        let out_r = genome.add_node(CppnNode::output(GeometricActivationFunction::BipolarGaussian));
+        let out_t = genome.add_node(CppnNode::output(GeometricActivationFunction::LinearBipolarClipped));
+        let out_ex = genome.add_node(CppnNode::output(GeometricActivationFunction::LinearBipolarClipped));
+        let out_w = genome.add_node(CppnNode::output(GeometricActivationFunction::LinearBipolarClipped));
+        let out_r = genome.add_node(CppnNode::output(GeometricActivationFunction::LinearBipolarClipped));
         outputs.push(out_t);
         outputs.push(out_ex);
         outputs.push(out_w);
