@@ -686,8 +686,9 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
         // Input layer
         {
             let z = 1.0;
-            let y = 0.0;
+            //let y = 0.0;
             for x in DistributeInterval::new(node_count.inputs, -1.0, 1.0) {
+                let y = 0.1 * (1.0 - x.powi(8));
                 substrate.add_node(Position3d::new(x, y, z),
                 Neuron::Input,
                 NodeConnectivity::Out);
@@ -696,9 +697,10 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
 
         // Hidden
         {
-            let z = 0.5;
-            let y = 0.0;
+            let z = 0.0;
+            //let y = 0.0;
             for x in DistributeInterval::new(node_count.hidden, -1.0, 1.0) {
+                let y = (1.0 - x.powi(8));
                 substrate.add_node(Position3d::new(x, y, z),
                 Neuron::Hidden,
                 NodeConnectivity::InOut);
@@ -707,10 +709,11 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
 
         // Outputs
         {
-            let z = 0.0;
-            let y = 0.0;
+            let z = -1.0;
+            //let y = 0.0;
             //let mut z = DistributeInterval::new(node_count.outputs, -0.1, 0.1);
             for x in DistributeInterval::new(node_count.outputs, -1.0, 1.0) {
+                let y = -0.1 * (1.0 - x.powi(8));
                 //substrate.add_node(Position3d::new(x, y, -z.next().unwrap()),
                 substrate.add_node(Position3d::new(x, y, z),
                 Neuron::Output,
