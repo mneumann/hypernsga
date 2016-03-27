@@ -704,8 +704,8 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
         {
             let z = 1.0;
             //let y = 0.0;
-            //for x in DistributeInterval::new(node_count.inputs, -1.0 * node_count.inputs as f64 / 2.0, 1.0 * node_count.inputs as f64 / 2.0) {
-            for x in DistributeInterval::new(node_count.inputs, -1.0, 1.0) {
+            for x in DistributeInterval::new(node_count.inputs, -1.0 * node_count.inputs as f64, 1.0 * node_count.inputs as f64) {
+            //for x in DistributeInterval::new(node_count.inputs, -1.0, 1.0) {
                 let y = 0.0; //0.1 * (1.0 - x.powi(8));
                 substrate.add_node(Position3d::new(x, y, z),
                 Neuron::Input,
@@ -715,12 +715,12 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
 
         // Hidden
         {
-            let z = 0.5;
+            let z = 0.0;
             //let y = 0.0;
-            //for x in DistributeInterval::new(node_count.inputs, -1.0 * node_count.hidden as f64 / 2.0, 1.0 * node_count.hidden as f64 / 2.0) {
-            for x in DistributeInterval::new(node_count.hidden, -1.0, 1.0) {
+            for x in DistributeInterval::new(node_count.hidden, -1.0 * node_count.hidden as f64, 1.0 * node_count.hidden as f64) {
+            //for x in DistributeInterval::new(node_count.hidden, -1.0, 1.0) {
                 //let y = (1.0 - x.powi(8));
-                let y = -1.0;
+                let y = 0.0; //-1.0;
                 substrate.add_node(Position3d::new(x, y, z),
                 Neuron::Hidden,
                 hidden_nodeset);
@@ -732,8 +732,8 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
             let z = -1.0;
             //let y = 0.0;
             //let mut z = DistributeInterval::new(node_count.outputs, -0.1, 0.1);
-            //for x in DistributeInterval::new(node_count.outputs, -1.0 * node_count.outputs as f64 / 2.0, 1.0* node_count.outputs as f64 / 2.0) {
-            for x in DistributeInterval::new(node_count.outputs, -1.0, 1.0) {
+            for x in DistributeInterval::new(node_count.outputs, -1.0 * node_count.outputs as f64, 1.0 * node_count.outputs as f64) {
+            //for x in DistributeInterval::new(node_count.outputs, -1.0, 1.0) {
                 //let y = -0.1 * (1.0 - x.powi(8));
                 let y = 0.0;
                 //substrate.add_node(Position3d::new(x, y, -z.next().unwrap()),

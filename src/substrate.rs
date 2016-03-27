@@ -87,16 +87,13 @@ impl<P, T> Substrate<P, T> where P: Position
             for (source_idx, source) in self.nodes.iter().enumerate() {
 
                 // Reject invalid connections.
-                if !source.in_nodeset(src_ns) {
-                    continue;
-                }
-
-                for (target_idx, target) in self.nodes.iter().enumerate() {
-                    // Reject invalid connections.
-                    if !target.in_nodeset(tgt_ns) {
-                        continue;
+                if source.in_nodeset(src_ns) {
+                    for (target_idx, target) in self.nodes.iter().enumerate() {
+                        // Reject invalid connections.
+                        if target.in_nodeset(tgt_ns) {
+                            pairs.push((source_idx, target_idx));
+                        }
                     }
-                    pairs.push((source_idx, target_idx));
                 }
             }
         }
