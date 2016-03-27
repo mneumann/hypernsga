@@ -15,7 +15,7 @@ extern crate graph_layout;
 use hypernsga::graph;
 use hypernsga::domain_graph::{Neuron, NeuronNetworkBuilder, GraphSimilarity};
 use hypernsga::network_builder::NetworkBuilder;
-use hypernsga::cppn::{Cppn, GeometricActivationFunction, RandomGenomeCreator, Reproduction,
+use hypernsga::cppn::{Cppn, CppnNodeKind, ActivationFunction, GeometricActivationFunction, RandomGenomeCreator, Reproduction,
 Expression, G, PopulationFitness};
 use hypernsga::fitness::{Fitness, DomainFitness};
 use hypernsga::mating::MatingMethodWeights;
@@ -155,6 +155,66 @@ impl<'a, W:Write> NetworkBuilder for GMLNetworkBuilder<'a, W> {
         ()
     }
 }
+
+
+pub struct DotNetworkBuilder<'a, W: Write+'a> {
+    wr: Option<&'a mut W>
+}
+
+impl<'a, W:Write> DotNetworkBuilder<'a, W> {
+    fn set_writer(&mut self, wr: &'a mut W) {
+        self.wr = Some(wr);
+    }
+    fn begin(&mut self) {
+        let wr = self.wr.as_mut().unwrap();
+        writeln!(wr, "digraph {{").unwrap();
+        writeln!(wr, "graph [layout=dot,overlap=false];").unwrap();
+        writeln!(wr, "node [fontname = Helvetica];").unwrap();
+    }
+    fn end(&mut self) {
+        let wr = self.wr.as_mut().unwrap();
+        writeln!(wr, "}}").unwrap();
+    }
+}
+
+impl<'a, W:Write> NetworkBuilder for DotNetworkBuilder<'a, W> {
+    type POS = Position3d;
+    type NT = Neuron;
+    type Output = ();
+
+    fn new() -> Self {
+        DotNetworkBuilder {
+            wr: None
+        }
+    }
+
+    fn add_node(&mut self, node: &Node<Self::POS, Self::NT>, param: f64) {
+        let wr = self.wr.as_mut().unwrap();
+        let rank = 
+        match node.node_info {
+            Neuron::Input => ",rank=min",
+            Neuron::Hidden => "",
+            Neuron::Output => ",rank=max",
+        };
+        writeln!(wr, "  {}[label={},weight={:.1}{}];", node.index, node.index, param, rank).unwrap();
+    }
+
+    fn add_link(&mut self,
+                source_node: &Node<Self::POS, Self::NT>,
+                target_node: &Node<Self::POS, Self::NT>,
+                weight1: f64,
+                _weight2: f64) {
+        let wr = self.wr.as_mut().unwrap();
+        let w = weight1.abs();
+        debug_assert!(w <= 1.0);
+        writeln!(wr, "  {} -> {} [weight={:.1}];", source_node.index, target_node.index, w).unwrap();
+    }
+
+    fn network(self) -> Self::Output {
+        ()
+    }
+}
+
 
 #[derive(Debug)]
 enum ViewMode {
@@ -1077,17 +1137,94 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
 
                         let best = &parents.individuals()[best_individual_i];
 
-                        let filename = format!("best.{}.{}.gml", state.iteration, (best.fitness().domain_fitness * 1000.0) as usize);
-                        println!("filename: {}", filename);
+                        let basefilename = format!("best.{}.{}", state.iteration, (best.fitness().domain_fitness * 1000.0) as usize);
 
-                        let mut file = File::create(&filename).unwrap();
-                        let mut network_builder = GMLNetworkBuilder::new();
-                        network_builder.set_writer(&mut file);
-                        network_builder.begin();
-                        let (_behavior, _connection_cost, _) = expression.express(best.genome(),
-                        &mut network_builder,
-                        &substrate_config);
-                        network_builder.end();
+                        println!("filename: {}", basefilename);
+
+                        // Write GML
+                        {
+                            let mut file = File::create(&format!("{}.gml", basefilename)).unwrap();
+                            let mut network_builder = GMLNetworkBuilder::new();
+                            network_builder.set_writer(&mut file);
+                            network_builder.begin();
+                            let (_behavior, _connection_cost, _) = expression.express(best.genome(),
+                            &mut network_builder,
+                            &substrate_config);
+                            network_builder.end();
+                        }
+                        // Write DOT
+                        {
+                            let mut file = File::create(&format!("{}.dot", basefilename)).unwrap();
+                            let mut network_builder = DotNetworkBuilder::new();
+                            network_builder.set_writer(&mut file);
+                            network_builder.begin();
+                            let (_behavior, _connection_cost, _) = expression.express(best.genome(),
+                            &mut network_builder,
+                            &substrate_config);
+                            network_builder.end();
+                        }
+                        // Write CPPN
+                        {
+                            let mut file = File::create(&format!("{}.cppn.dot", basefilename)).unwrap();
+                            let network = best.genome().network();
+
+                            writeln!(&mut file, "digraph {{
+graph [
+  layout=neato,
+  rankdir = \"TB\",
+  overlap=false,
+  compound = true,
+  nodesep = 1,
+  ranksep = 2.0,
+  splines = \"polyline\",
+];
+node [fontname = Helvetica];
+");
+
+                            network.each_node_with_index(|node, node_idx| {
+                                let s = 
+                                match node.node_type().kind {
+                                    CppnNodeKind::Input => {
+                                        let label = match node_idx.index() {
+                                            0 => "x1",
+                                            1 => "y1",
+                                            2 => "z1",
+                                            3 => "x2",
+                                            4 => "y2",
+                                            5 => "z2",
+                                            _ => "X",
+                                        };
+
+                                        // XXX label
+                                        format!("shape=egg,label={},rank=min,style=filled,color=grey", label)
+                                    }
+                                    CppnNodeKind::Bias => {
+                                        assert!(node_idx.index() == 6);
+                                        format!("shape=egg,label=1.0,rank=min,style=filled,color=grey")
+                                    }
+                                    CppnNodeKind::Output => {
+                                        let label = match node_idx.index() {
+                                            7 => "t",
+                                            8 => "ex",
+                                            9 => "w",
+                                            10 => "r", 
+                                            _ => panic!(),
+                                        };
+                                        format!("shape=doublecircle,label={},rank=max,style=filled,fillcolor=yellow,color=grey", label)
+                                    }
+                                    CppnNodeKind::Hidden => {
+                                        format!("shape=box,label={}", node.node_type().activation_function.name())
+                                    }
+                                };
+                                writeln!(&mut file, "{} [{}];", node_idx.index(), s);
+                            });
+                            network.each_link_ref(|link_ref| {
+                                writeln!(&mut file, "{} -> {} [];", link_ref.link().source_node_index().index(), link_ref.link().target_node_index().index());
+                            });
+
+                            writeln!(&mut file, "}}");
+                        }
+ 
                     }
                     Action::ResetNet => {
                         parents = {
