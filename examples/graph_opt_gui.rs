@@ -1039,7 +1039,10 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
 
                         let best = &parents.individuals()[best_individual_i];
 
-                        let mut file = File::create("best.gml").unwrap();
+                        let filename = format!("best.{}.{}.gml", state.iteration, (best.fitness().domain_fitness * 1000.0) as usize);
+                        println!("filename: {}", filename);
+
+                        let mut file = File::create(&filename).unwrap();
                         let mut network_builder = GMLNetworkBuilder::new();
                         network_builder.set_writer(&mut file);
                         network_builder.begin();
