@@ -229,7 +229,8 @@ struct EvoConfig {
 #[derive(Debug, Clone, Copy)]
 enum Action {
     None,
-    ExportBest
+    ExportBest,
+    ResetNet,
 }
 
 extern "C" fn values_getter(data: *mut c_void, idx: c_int) -> c_float {
@@ -447,6 +448,9 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
             }
             if ui.small_button(im_str!("Export Best")) {
                 state.action = Action::ExportBest;
+            }
+            if ui.small_button(im_str!("Reset")) {
+                state.action = Action::ResetNet;
             }
 
             let views = im_str!("detailed\0multi cppn\0multi graph\0overview\0");
@@ -691,6 +695,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
         {
             let z = 1.0;
             //let y = 0.0;
+            //for x in DistributeInterval::new(node_count.inputs, -1.0 * node_count.inputs as f64 / 2.0, 1.0 * node_count.inputs as f64 / 2.0) {
             for x in DistributeInterval::new(node_count.inputs, -1.0, 1.0) {
                 let y = 0.0; //0.1 * (1.0 - x.powi(8));
                 substrate.add_node(Position3d::new(x, y, z),
@@ -703,7 +708,8 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
         {
             let z = 0.0;
             //let y = 0.0;
-            for x in DistributeInterval::new(node_count.hidden, -1.0, 1.0) {
+            //for x in DistributeInterval::new(node_count.inputs, -1.0 * node_count.hidden as f64 / 2.0, 1.0 * node_count.hidden as f64 / 2.0) {
+            for x in DistributeInterval::new(node_count.inputs, -1.0, 1.0) {
                 //let y = (1.0 - x.powi(8));
                 let y = 0.0;
                 substrate.add_node(Position3d::new(x, y, z),
@@ -717,6 +723,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
             let z = -1.0;
             //let y = 0.0;
             //let mut z = DistributeInterval::new(node_count.outputs, -0.1, 0.1);
+            //for x in DistributeInterval::new(node_count.outputs, -1.0 * node_count.outputs as f64 / 2.0, 1.0* node_count.outputs as f64 / 2.0) {
             for x in DistributeInterval::new(node_count.outputs, -1.0, 1.0) {
                 //let y = -0.1 * (1.0 - x.powi(8));
                 let y = 0.0;
@@ -752,7 +759,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                 crossover_weights: 0,
             },
             activation_functions: vec![
-                //GeometricActivationFunction::Linear,
+                GeometricActivationFunction::Linear,
                 //GeometricActivationFunction::Gaussian,
                 GeometricActivationFunction::BipolarGaussian,
                 GeometricActivationFunction::BipolarSigmoid,
@@ -944,6 +951,8 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                                                        ).unwrap());
                     }
 
+                    const N: usize = 4;
+
                     let (width, height) = target.get_dimensions();
                     match state.view { 
                         ViewMode::BestDetailed => {
@@ -970,12 +979,12 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                                 }
                             });
                             let mut i = 0;
-                            'outer: for y in 0..5 {
-                                for x in 0..10 {
+                            'outer: for y in 0..N {
+                                for x in 0..(2*N) {
                                     if i >= indiv.len() {
                                         break 'outer;
                                     }
-                                    let rect = glium::Rect {left: x*width/10, bottom: y*height/10, width: width/10, height: height/10};
+                                    let rect = glium::Rect {left: (x as u32)*width/(2*N as u32), bottom: (y as u32)*height/(2*N as u32), width: width/(2*N as u32), height: height/(2*N as u32)};
                                     let genome = indiv[indices[i]].genome();
                                     render_cppn(display, target, genome, &expression, program_vertex.as_ref().unwrap(), &state, &substrate_config, rect);
                                     i += 1;
@@ -983,12 +992,12 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                             }
 
                             let mut i = 0;
-                            'outer: for y in 5..10 {
-                                for x in 0..10 {
+                            'outer: for y in N..(2*N) {
+                                for x in 0..(2*N) {
                                     if i >= indiv.len() {
                                         break 'outer;
                                     }
-                                    let rect = glium::Rect {left: x*width/10, bottom: y*height/10, width: width/10, height: height/10};
+                                    let rect = glium::Rect {left: (x as u32)*width/(2*N as u32), bottom: (y as u32)*height/(2*N as u32), width: width/(2*N as u32), height: height/(2*N as u32)};
                                     let genome = indiv[indices[i]].genome();
                                     render_graph(display, target, genome, &expression, program_substrate.as_ref().unwrap(), &state, &substrate_config, rect, 1.0, 2.5);
                                     i += 1;
@@ -1009,12 +1018,12 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                                 }
                             });
                             let mut i = 0;
-                            'outer: for y in 0..10 {
-                                for x in 0..10 {
+                            'outer: for y in 0..(2*N) {
+                                for x in 0..(2*N) {
                                     if i >= indiv.len() {
                                         break 'outer;
                                     }
-                                    let rect = glium::Rect {left: x*width/10, bottom: y*height/10, width: width/10, height: height/10};
+                                    let rect = glium::Rect {left: (x as u32)*width/(2*N as u32), bottom: (y as u32)*height/(2*N as u32), width: width/(2*N as u32), height: height/(2*N as u32)};
                                     let genome = indiv[indices[i]].genome();
                                     if let ViewMode::CppnOverview = state.view {
                                         render_cppn(display, target, genome, &expression, program_vertex.as_ref().unwrap(), &state, &substrate_config, rect);
@@ -1056,6 +1065,42 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                         &mut network_builder,
                         &substrate_config);
                         network_builder.end();
+                    }
+                    Action::ResetNet => {
+                        parents = {
+                            let mut initial = UnratedPopulation::new();
+                            for _ in 0..state.mu {
+                                initial.push(random_genome_creator.create::<_, Position3d>(0, &mut rng));
+                            }
+                            let mut rated = initial.rate_in_parallel(&|ind| {
+                                fitness(ind,
+                                        &expression,
+                                        &substrate_config,
+                                        &domain_fitness_eval)
+                            },
+                            INFINITY);
+
+                            PopulationFitness.apply(0, &mut rated);
+
+                            rated.select(state.mu as usize,
+                                         &evo_config.objectives,
+                                         &selection,
+                                         &mut rng)
+                        };
+
+                        best_individual_i = 0;
+                        best_fitness = parents.individuals()[best_individual_i].fitness().domain_fitness;
+                        for (i, ind) in parents.individuals().iter().enumerate() {
+                            let fitness = ind.fitness().domain_fitness;
+                            if fitness > best_fitness {
+                                best_fitness = fitness;
+                                best_individual_i = i;
+                            }
+                        }
+                        state.best_fitness = best_fitness;
+                        state.best_fitness_history.clear();
+                        state.best_fitness_history.push((state.iteration, state.best_fitness));
+                        state.iteration = 0;
                     }
                     _ => {
                     }
@@ -1115,6 +1160,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                 }
 
                 if state.recalc_fitness {
+                    // XXX: Action::RecalcFitness
                     state.recalc_fitness = false;
                     let offspring = parents.into_unrated();
                     let mut next_gen = offspring.rate_in_parallel(&|ind| {
