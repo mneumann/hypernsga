@@ -220,6 +220,7 @@ struct State {
 
     auto_reset: i32,
     auto_reset_enable: bool,
+    auto_reset_counter: usize,
 }
 
 struct EvoConfig {
@@ -460,6 +461,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                 }
                 ui.checkbox(im_str!("Enable Autoreset"), &mut state.auto_reset_enable);
                 ui.slider_i32(im_str!("Autoreset after"), &mut state.auto_reset, 100, 10000).build();
+                ui.text(im_str!("Autoreset counter: {}", state.auto_reset_counter));
 
                 let views = im_str!("detailed\0multi cppn\0multi graph\0overview\0");
                 let mut current: c_int = match state.view {
@@ -898,7 +900,8 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
             global_element_mutation: 0.0,
 
             auto_reset: 250,
-            auto_reset_enable: false,
+            auto_reset_enable: true,
+            auto_reset_counter: 0,
         };
 
         let mut program_substrate: Option<glium::Program> = None;
@@ -1063,6 +1066,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                     if state.iteration > state.auto_reset as usize {
                         println!("Autoreset at {}", state.iteration);
                         state.action = Action::ResetNet;
+                        state.auto_reset_counter += 1;
                     }
                 }
 
