@@ -688,7 +688,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
             let z = 1.0;
             //let y = 0.0;
             for x in DistributeInterval::new(node_count.inputs, -1.0, 1.0) {
-                let y = 0.1 * (1.0 - x.powi(8));
+                let y = 0.0; //0.1 * (1.0 - x.powi(8));
                 substrate.add_node(Position3d::new(x, y, z),
                 Neuron::Input,
                 NodeConnectivity::Out);
@@ -700,7 +700,8 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
             let z = 0.0;
             //let y = 0.0;
             for x in DistributeInterval::new(node_count.hidden, -1.0, 1.0) {
-                let y = (1.0 - x.powi(8));
+                //let y = (1.0 - x.powi(8));
+                let y = 0.0;
                 substrate.add_node(Position3d::new(x, y, z),
                 Neuron::Hidden,
                 NodeConnectivity::InOut);
@@ -713,7 +714,8 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
             //let y = 0.0;
             //let mut z = DistributeInterval::new(node_count.outputs, -0.1, 0.1);
             for x in DistributeInterval::new(node_count.outputs, -1.0, 1.0) {
-                let y = -0.1 * (1.0 - x.powi(8));
+                //let y = -0.1 * (1.0 - x.powi(8));
+                let y = 0.0;
                 //substrate.add_node(Position3d::new(x, y, -z.next().unwrap()),
                 substrate.add_node(Position3d::new(x, y, z),
                 Neuron::Output,
@@ -728,7 +730,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
             objectives: vec![0,1,2,3,4,5],
         };
 
-        let mut selection = SelectNSGP { objective_eps: 0.01 };
+        let mut selection = SelectNSGPMod { objective_eps: 0.01 };
 
         let weight_perturbance_sigma = 0.1;
         let link_weight_range = 1.0;
@@ -746,7 +748,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                 crossover_weights: 0,
             },
             activation_functions: vec![
-                GeometricActivationFunction::Linear,
+                //GeometricActivationFunction::Linear,
                 //GeometricActivationFunction::Gaussian,
                 GeometricActivationFunction::BipolarGaussian,
                 GeometricActivationFunction::BipolarSigmoid,
@@ -1138,6 +1140,10 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                     state.best_fitness = best_fitness;
                     state.best_fitness_history.push((state.iteration, state.best_fitness));
                 }
+            }
+
+            if state.best_fitness >= 0.99 {
+                state.running = false;
             }
 
             if state.running {
