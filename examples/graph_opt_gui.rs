@@ -205,9 +205,14 @@ impl<'a, W:Write> NetworkBuilder for DotNetworkBuilder<'a, W> {
                 weight1: f64,
                 _weight2: f64) {
         let wr = self.wr.as_mut().unwrap();
+        let color = if weight1 >= 0.0 {
+            "black"
+        } else {
+            "red"
+        };
         let w = weight1.abs();
-        debug_assert!(w <= 1.0);
-        writeln!(wr, "  {} -> {} [weight={:.1}];", source_node.index, target_node.index, w).unwrap();
+        //debug_assert!(w <= 1.0);
+        writeln!(wr, "  {} -> {} [weight={:.2},color={}];", source_node.index, target_node.index, w, color).unwrap();
     }
 
     fn network(self) -> Self::Output {
@@ -281,6 +286,8 @@ struct State {
     auto_reset: i32,
     auto_reset_enable: bool,
     auto_reset_counter: usize,
+
+    stop_when_fitness_above: f32,
 }
 
 struct EvoConfig {
@@ -519,6 +526,8 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                 if ui.small_button(im_str!("Reset")) {
                     state.action = Action::ResetNet;
                 }
+
+                ui.slider_f32(im_str!("Stop when Fitness"), &mut state.stop_when_fitness_above, 0.9, 1.0).build();
                 ui.checkbox(im_str!("Enable Autoreset"), &mut state.auto_reset_enable);
                 ui.slider_i32(im_str!("Autoreset after"), &mut state.auto_reset, 100, 10000).build();
                 ui.text(im_str!("Autoreset counter: {}", state.auto_reset_counter));
@@ -760,11 +769,19 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
         let hidden_nodeset = NodeSet::single(1);
         let output_nodeset = NodeSet::single(2);
 
-        let nodeset_links = &[(input_nodeset, hidden_nodeset), (hidden_nodeset, output_nodeset), (input_nodeset, output_nodeset)];
+        let nodeset_links = &[(input_nodeset, hidden_nodeset), (hidden_nodeset, output_nodeset), (input_nodeset, output_nodeset),
+        //(output_nodeset, input_nodeset)
+        ];
+
+        //let nodeset_links = &[(input_nodeset, hidden_nodeset), (hidden_nodeset, output_nodeset),
+        //(output_nodeset, input_nodeset)
+        //];
+
 
         // Input layer
         {
-            let z = 1.0;
+            let z = -1.0;
+            //let z = 0.0;
             //let y = 0.0;
             for x in DistributeInterval::new(node_count.inputs, -1.0 * node_count.inputs as f64, 1.0 * node_count.inputs as f64) {
             //for x in DistributeInterval::new(node_count.inputs, -1.0, 1.0) {
@@ -791,7 +808,8 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
 
         // Outputs
         {
-            let z = -1.0;
+            let z = 1.0;
+            //let z = 1.0;
             //let y = 0.0;
             //let mut z = DistributeInterval::new(node_count.outputs, -0.1, 0.1);
             for x in DistributeInterval::new(node_count.outputs, -1.0 * node_count.outputs as f64, 1.0 * node_count.outputs as f64) {
@@ -831,11 +849,12 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
             },
             activation_functions: vec![
                 GeometricActivationFunction::Linear,
+                GeometricActivationFunction::LinearClipped,
                 //GeometricActivationFunction::Gaussian,
                 GeometricActivationFunction::BipolarGaussian,
                 GeometricActivationFunction::BipolarSigmoid,
                 GeometricActivationFunction::Sine,
-                //GeometricActivationFunction::Absolute,
+                GeometricActivationFunction::Absolute,
             ],
             mutate_element_prob: Prob::new(0.05),
             weight_perturbance: WeightPerturbanceMethod::JiggleGaussian {
@@ -911,6 +930,8 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
             mu: evo_config.mu as i32,
             lambda: evo_config.lambda as i32,
             k: evo_config.k as i32,
+
+            stop_when_fitness_above: 0.995,
 
             mutate_add_node: reproduction.mating_method_weights.mutate_add_node as i32,
             mutate_drop_node: reproduction.mating_method_weights.mutate_drop_node as i32,
@@ -1219,7 +1240,13 @@ node [fontname = Helvetica];
                                 writeln!(&mut file, "{} [{}];", node_idx.index(), s);
                             });
                             network.each_link_ref(|link_ref| {
-                                writeln!(&mut file, "{} -> {} [];", link_ref.link().source_node_index().index(), link_ref.link().target_node_index().index());
+                                let w = link_ref.link().weight().0;
+                                let color = if w >= 0.0 {
+                                    "black"
+                                } else {
+                                    "red"
+                                };
+                                writeln!(&mut file, "{} -> {} [color={}];", link_ref.link().source_node_index().index(), link_ref.link().target_node_index().index(), color);
                             });
 
                             writeln!(&mut file, "}}");
@@ -1352,7 +1379,7 @@ node [fontname = Helvetica];
                 }
             }
 
-            if state.best_fitness >= 0.99 {
+            if state.best_fitness >= state.stop_when_fitness_above as f64 {
                 state.running = false;
             }
 
