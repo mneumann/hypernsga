@@ -288,6 +288,7 @@ struct State {
     auto_reset_counter: usize,
 
     stop_when_fitness_above: f32,
+    enable_stop: bool,
 }
 
 struct EvoConfig {
@@ -824,8 +825,8 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
         }
 
         let mut evo_config = EvoConfig {
-            mu: 50,
-            lambda: 25,
+            mu: 100,
+            lambda: 100,
             k: 2,
             objectives: vec![0,1,2,3,4,5],
         };
@@ -922,7 +923,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
         }
 
         let mut state = State {
-            running: true,
+            running: false,
             recalc_fitness: false,
             // recalc_substrate
             iteration: 0,
@@ -931,7 +932,8 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
             lambda: evo_config.lambda as i32,
             k: evo_config.k as i32,
 
-            stop_when_fitness_above: 0.995,
+            stop_when_fitness_above: 0.999,
+            enable_stop: true,
 
             mutate_add_node: reproduction.mating_method_weights.mutate_add_node as i32,
             mutate_drop_node: reproduction.mating_method_weights.mutate_drop_node as i32,
@@ -981,7 +983,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
             global_element_mutation: 0.0,
 
             auto_reset: 250,
-            auto_reset_enable: true,
+            auto_reset_enable: false,
             auto_reset_counter: 0,
         };
 
@@ -1379,11 +1381,13 @@ node [fontname = Helvetica];
                 }
             }
 
-            if state.best_fitness >= state.stop_when_fitness_above as f64 {
+            if state.enable_stop && state.best_fitness >= state.stop_when_fitness_above as f64 {
                 state.running = false;
             }
 
             if state.running {
+                let time_before = time::precise_time_ns();
+
                 // create next generation
                 state.iteration += 1;
                 let offspring = parents.reproduce(&mut rng,
@@ -1446,6 +1450,11 @@ node [fontname = Helvetica];
 
                 state.best_fitness = best_fitness;
                 state.best_fitness_history.push((state.iteration, state.best_fitness));
+
+                let time_after = time::precise_time_ns();
+                assert!(time_after > time_before);
+                let total_ns = time_after - time_before; 
+                println!("{}\t{}", state.iteration, total_ns);
             }
         }
     }
