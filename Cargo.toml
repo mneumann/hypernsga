@@ -14,12 +14,10 @@ include = ["src/*.rs", "Cargo.toml", "LICENSE", "README.md"]
 rand = "0.3"
 rayon = "0.3.1"
 log = "0.3.5"
-#cppn = {git = "https://github.com/mneumann/cppn-rs"}
-cppn = {path = "../cppn-rs"}
+cppn = {git = "https://github.com/mneumann/cppn-rs"}
 acyclic-network = {git = "https://github.com/mneumann/acyclic-network-rs"}
 graph-neighbor-matching = "0.6.1"
-#nsga2 = {git = "https://github.com/mneumann/nsga2-rs"}
-nsga2 = {path = "../nsga2-rs"}
+nsga2 = {git = "https://github.com/mneumann/nsga2-rs"}
 hamming = "0.1"
 primal-bit = "0.2.3"
 closed01 = "0.4"
@@ -31,9 +29,7 @@ petgraph = "0.2.3"
 [dev-dependencies]
 criterion-stats = "0.1.0"
 #pcg = { git = "https://github.com/codahale/pcg.git" }
-#imgui = { git = "https://github.com/gekkio/imgui-rs" }
-imgui = { path = "../imgui-rs" }
-imgui-sys = { path = "../imgui-rs/imgui-sys" }
+imgui = { git = "https://github.com/gekkio/imgui-rs" }
 glium = "0.13"
 time = "0.1"
 conrod = "0.32.0"
