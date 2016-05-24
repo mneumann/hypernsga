@@ -120,15 +120,15 @@ impl Support {
                         _ => {},
                     }
                 },
-                Event::MouseMoved(pos) => self.mouse_pos = pos,
+                Event::MouseMoved(x,y) => self.mouse_pos = (x,y),
                 Event::MouseInput(state, MouseButton::Left) =>
                     self.mouse_pressed.0 = state == ElementState::Pressed,
                 Event::MouseInput(state, MouseButton::Right) =>
                     self.mouse_pressed.1 = state == ElementState::Pressed,
                 Event::MouseInput(state, MouseButton::Middle) =>
                     self.mouse_pressed.2 = state == ElementState::Pressed,
-                Event::MouseWheel(MouseScrollDelta::LineDelta(_, y)) => self.mouse_wheel = y,
-                Event::MouseWheel(MouseScrollDelta::PixelDelta(_, y)) => self.mouse_wheel = y,
+                Event::MouseWheel(MouseScrollDelta::LineDelta(_, y), _) => self.mouse_wheel = y,
+                Event::MouseWheel(MouseScrollDelta::PixelDelta(_, y), _) => self.mouse_wheel = y,
                 Event::ReceivedCharacter(c) => self.imgui.add_input_character(c),
                 _ => ()
             }
