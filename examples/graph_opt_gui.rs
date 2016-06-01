@@ -48,6 +48,50 @@ mod support;
 
 const CLEAR_COLOR: (f32, f32, f32, f32) = (1.0, 1.0, 1.0, 1.0);
 
+
+const VERTEX_SHADER_SUBSTRATE: &'static str = "
+                    #version 140
+                    uniform mat4 matrix;
+                    uniform mat4 perspective;
+                    in vec3 position;
+                    in vec4 color;
+                    out vec4 fl_color;
+                    void main() {
+                        gl_Position = perspective * matrix * vec4(position, 1.0);
+                        fl_color = color;
+                    }
+                ";
+
+const FRAGMENT_SHADER_SUBSTRATE: &'static str = "
+                    #version 140
+                    in vec4 fl_color;
+                    out vec4 color;
+                    void main() {
+                        color = fl_color;
+                    }
+                ";
+
+const VERTEX_SHADER_VERTEX: &'static str = "
+                    #version 140
+                    uniform mat4 matrix;
+                    in vec3 position;
+                    in vec4 color;
+                    out vec4 fl_color;
+                    void main() {
+                        gl_Position = matrix * vec4(position, 1.0);
+                        fl_color = color;
+                    }
+";
+
+const FRAGMENT_SHADER_VERTEX: &'static str = "
+                    #version 140
+                    in vec4 fl_color;
+                    out vec4 color;
+                    void main() {
+                        color = fl_color;
+                    }
+";
+
 #[derive(Copy, Clone)]
 struct Vertex {
     position: [f32; 3],
@@ -995,58 +1039,11 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                 support.render(CLEAR_COLOR, |display, imgui, renderer, target, delta_f| {
 
                     if program_substrate.is_none() {
-                        program_substrate = Some(program!(display,
-                                                          140 => {
-                                                              vertex: "
-                    #version 140
-                    uniform mat4 matrix;
-                    uniform mat4 perspective;
-                    in vec3 position;
-                    in vec4 color;
-                    out vec4 fl_color;
-                    void main() {
-                        gl_Position = perspective * matrix * vec4(position, 1.0);
-                        fl_color = color;
-                    }
-                ",
-
-                fragment: "
-                    #version 140
-                    in vec4 fl_color;
-                    out vec4 color;
-                    void main() {
-                        color = fl_color;
-                    }
-                "
-                                                          },
-                                                          ).unwrap());
+                        program_substrate = Some(glium::Program::from_source(display, VERTEX_SHADER_SUBSTRATE, FRAGMENT_SHADER_SUBSTRATE, None).unwrap());
                     }
 
                     if program_vertex.is_none() {
-                        program_vertex = Some(program!(display,
-                                                       140 => {
-                                                           vertex: "
-                    #version 140
-                    uniform mat4 matrix;
-                    in vec3 position;
-                    in vec4 color;
-                    out vec4 fl_color;
-                    void main() {
-                        gl_Position = matrix * vec4(position, 1.0);
-                        fl_color = color;
-                    }
-                ",
-
-                fragment: "
-                    #version 140
-                    in vec4 fl_color;
-                    out vec4 color;
-                    void main() {
-                        color = fl_color;
-                    }
-                "
-                                                       },
-                                                       ).unwrap());
+                        program_vertex = Some(glium::Program::from_source(display, VERTEX_SHADER_VERTEX, FRAGMENT_SHADER_VERTEX, None).unwrap());
                     }
 
                     const N: usize = 4;
