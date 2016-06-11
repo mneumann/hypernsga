@@ -30,7 +30,6 @@ petgraph = "0.2"
 criterion-stats = "0.1"
 #pcg = { git = "https://github.com/codahale/pcg.git" }
 imgui = { git = "https://github.com/gekkio/imgui-rs" }
-imgui-sys = { git = "https://github.com/gekkio/imgui-rs" }
 glium = "0.14"
 time = "0.1"
 piston_window = "0.47"

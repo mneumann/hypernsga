@@ -8,7 +8,6 @@ extern crate glium;
 #[macro_use]
 extern crate imgui;
 extern crate time;
-extern crate imgui_sys;
 extern crate libc;
 extern crate graph_layout;
 
@@ -35,7 +34,6 @@ use rand::Rng;
 
 use imgui::*;
 use self::support::Support;
-use imgui_sys::{igPlotLines2, igCombo2};
 use libc::*;
 use glium::Surface;
 use glium::index::PrimitiveType;
@@ -349,13 +347,6 @@ enum Action {
     ResetNet,
 }
 
-extern "C" fn values_getter(data: *mut c_void, idx: c_int) -> c_float {
-    unsafe {
-        let state: &mut State = mem::transmute(data);
-        state.best_fitness_history.get(idx as usize).map(|e| e.1).unwrap() as c_float
-    }
-}
-
 fn render_graph(display: &GlutinFacade, target: &mut glium::Frame, genome: &G, expression: &Expression, program: &glium::Program, state: &State,
                 substrate_config: &SubstrateConfiguration<Position3d, Neuron>, viewport: glium::Rect, line_width: f32, point_size: f32) {
     let mut network_builder = VizNetworkBuilder::new();
@@ -572,13 +563,13 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                     state.action = Action::ResetNet;
                 }
 
-                ui.slider_f32(im_str!("Stop when Fitness"), &mut state.stop_when_fitness_above, 0.9, 1.0).build();
+                ui.slider_float(im_str!("Stop when Fitness"), &mut state.stop_when_fitness_above, 0.9, 1.0).build();
                 ui.checkbox(im_str!("Enable Autoreset"), &mut state.auto_reset_enable);
-                ui.slider_i32(im_str!("Autoreset after"), &mut state.auto_reset, 100, 10000).build();
+                ui.slider_int(im_str!("Autoreset after"), &mut state.auto_reset, 100, 10000).build();
                 ui.text(im_str!("Autoreset counter: {}", state.auto_reset_counter));
 
-                let views = im_str!("detailed\0multi cppn\0multi graph\0overview\0");
-                let mut current: c_int = match state.view {
+                let views = &[im_str!("detailed"), im_str!("multi cppn"), im_str!("multi graph"), im_str!("overview")];
+                let mut current: i32 = match state.view {
                     ViewMode::BestDetailed => {
                         0
                     }
@@ -591,21 +582,16 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                     ViewMode::Overview => {
                         3
                     }
-
                 };
-                unsafe {
-                    if igCombo2(im_str!("view").as_ptr(), &mut current as *mut c_int, views.as_ptr(), 4) {
-                        if current == 0 {
-                            state.view = ViewMode::BestDetailed;
-                        } else if current == 1 {
-                            state.view = ViewMode::CppnOverview;
-                        } else if current == 2 {
-                            state.view = ViewMode::GraphOverview;
-                        } else if current == 3 {
-                            state.view = ViewMode::Overview;
-                        }
-
-
+                if ui.combo(im_str!("view"), &mut current, views, 4) {
+                    if current == 0 {
+                        state.view = ViewMode::BestDetailed;
+                    } else if current == 1 {
+                        state.view = ViewMode::CppnOverview;
+                    } else if current == 2 {
+                        state.view = ViewMode::GraphOverview;
+                    } else if current == 3 {
+                        state.view = ViewMode::Overview;
                     }
                 }
             }
@@ -621,18 +607,14 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
             }
 
             if ui.collapsing_header(im_str!("History")).build() {
-                let num_points = state.best_fitness_history.len();
-                unsafe {
-                    igPlotLines2(im_str!("performance").as_ptr(),
-                    values_getter,
-                    (state as *mut State) as *mut c_void,
-                    num_points as c_int,
-                    0 as c_int,
-                    im_str!("Domain Fitness").as_ptr(),
-                    0.0 as c_float,
-                    1.0 as c_float,
-                    ImVec2::new(400.0, 50.0));
-                }
+                let fitness_histogram: Vec<_> = state.best_fitness_history.iter().map(|&(_i, f)| f as f32).collect();
+                PlotLines::new(im_str!("performance"),
+                              &fitness_histogram).
+                              overlay_text(im_str!("Domain Fitness")).
+                              graph_size(ImVec2::new(400.0, 50.0)).
+                              scale_min(0.0).
+                              scale_max(1.0).
+                              build();
             }
             if ui.collapsing_header(im_str!("Objectives")).build() {
                 ui.checkbox(im_str!("Behavioral Diversity"), &mut state.objectives_use_behavioral);
@@ -642,13 +624,13 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                 ui.checkbox(im_str!("Complexity"), &mut state.objectives_use_complexity);
             }
             if ui.collapsing_header(im_str!("Population Settings")).build() {
-                ui.slider_i32(im_str!("Population Size"), &mut state.mu, state.k, 1000).build();
-                ui.slider_i32(im_str!("Offspring Size"), &mut state.lambda, 1, 1000).build();
+                ui.slider_int(im_str!("Population Size"), &mut state.mu, state.k, 1000).build();
+                ui.slider_int(im_str!("Offspring Size"), &mut state.lambda, 1, 1000).build();
             }
 
             if ui.collapsing_header(im_str!("Selection")).build() {
-                ui.slider_i32(im_str!("Tournament Size"), &mut state.k, 1, state.mu).build();
-                ui.slider_f32(im_str!("NSGP Objective Epsilon"),
+                ui.slider_int(im_str!("Tournament Size"), &mut state.k, 1, state.mu).build();
+                ui.slider_float(im_str!("NSGP Objective Epsilon"),
                 &mut state.nsgp_objective_eps,
                 0.0,
                 1.0)
@@ -656,32 +638,32 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
             }
 
             if ui.collapsing_header(im_str!("View")).build() {
-                ui.slider_f32(im_str!("Rotate Substrate x"),
+                ui.slider_float(im_str!("Rotate Substrate x"),
                 &mut state.rotate_substrate_x,
                 0.0,
                 360.0)
                     .build();
-                ui.slider_f32(im_str!("Rotate Substrate y"),
+                ui.slider_float(im_str!("Rotate Substrate y"),
                 &mut state.rotate_substrate_y,
                 0.0,
                 360.0)
                     .build();
-                ui.slider_f32(im_str!("Rotate Substrate z"),
+                ui.slider_float(im_str!("Rotate Substrate z"),
                 &mut state.rotate_substrate_z,
                 0.0,
                 360.0)
                     .build();
-                ui.slider_f32(im_str!("Scale Substrate x"),
+                ui.slider_float(im_str!("Scale Substrate x"),
                 &mut state.scale_substrate_x,
                 0.0,
                 1.0)
                     .build();
-                ui.slider_f32(im_str!("Scale Substrate y"),
+                ui.slider_float(im_str!("Scale Substrate y"),
                 &mut state.scale_substrate_y,
                 0.0,
                 1.0)
                     .build();
-                ui.slider_f32(im_str!("Scale Substrate z"),
+                ui.slider_float(im_str!("Scale Substrate z"),
                 &mut state.scale_substrate_z,
                 0.0,
                 1.0)
@@ -689,28 +671,28 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
             }
 
             if ui.collapsing_header(im_str!("CPPN")).build() {
-                ui.slider_f32(im_str!("Link Expression Min"),
+                ui.slider_float(im_str!("Link Expression Min"),
                 &mut state.link_expression_min,
                 -1.0,
                 1.0)
                     .build();
-                ui.slider_f32(im_str!("Link Expression Max"),
+                ui.slider_float(im_str!("Link Expression Max"),
                 &mut state.link_expression_max,
                 -1.0,
                 1.0)
                     .build();
 
-                ui.slider_f32(im_str!("Link Weight Range (bipolar)"),
+                ui.slider_float(im_str!("Link Weight Range (bipolar)"),
                 &mut state.link_weight_range,
                 0.1,
                 5.0)
                     .build();
-                ui.slider_f32(im_str!("Link Weight Creation Sigma"),
+                ui.slider_float(im_str!("Link Weight Creation Sigma"),
                 &mut state.link_weight_creation_sigma,
                 0.01,
                 1.0)
                     .build();
-                ui.slider_f32(im_str!("Weight Perturbance Sigma"),
+                ui.slider_float(im_str!("Weight Perturbance Sigma"),
                 &mut state.weight_perturbance_sigma,
                 0.0,
                 1.0)
@@ -719,36 +701,36 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
 
             if ui.collapsing_header(im_str!("Neighbor Matching")).build() {
                 ui.checkbox(im_str!("Edge Weight Scoring"), &mut state.nm_edge_score);
-                ui.slider_i32(im_str!("Iterations"), &mut state.nm_iters, 1, 1000).build();
-                ui.slider_f32(im_str!("Eps"), &mut state.nm_eps, 0.0, 1.0).build();
+                ui.slider_int(im_str!("Iterations"), &mut state.nm_iters, 1, 1000).build();
+                ui.slider_float(im_str!("Eps"), &mut state.nm_eps, 0.0, 1.0).build();
             }
 
             if ui.collapsing_header(im_str!("Mutation")).build() {
-                ui.slider_f32(im_str!("Mutation Rate"),
+                ui.slider_float(im_str!("Mutation Rate"),
                 &mut state.mutate_element_prob,
                 0.0,
                 1.0)
                     .build();
-                ui.slider_i32(im_str!("Weights"), &mut state.mutate_weights, 1, 100).build();
-                ui.slider_i32(im_str!("Add Node"), &mut state.mutate_add_node, 0, 100).build();
-                ui.slider_i32(im_str!("Drop Node"), &mut state.mutate_drop_node, 0, 100).build();
-                ui.slider_i32(im_str!("Modify Node"),
+                ui.slider_int(im_str!("Weights"), &mut state.mutate_weights, 1, 100).build();
+                ui.slider_int(im_str!("Add Node"), &mut state.mutate_add_node, 0, 100).build();
+                ui.slider_int(im_str!("Drop Node"), &mut state.mutate_drop_node, 0, 100).build();
+                ui.slider_int(im_str!("Modify Node"),
                 &mut state.mutate_modify_node,
                 0,
                 100)
                     .build();
-                ui.slider_i32(im_str!("Connect"), &mut state.mutate_connect, 0, 100).build();
-                ui.slider_i32(im_str!("Disconnect"), &mut state.mutate_disconnect, 0, 100).build();
-                ui.slider_i32(im_str!("Sym Join"), &mut state.mutate_symmetric_join, 0, 100).build();
-                ui.slider_i32(im_str!("Sym Fork"), &mut state.mutate_symmetric_fork, 0, 100).build();
-                ui.slider_i32(im_str!("Sym Connect"), &mut state.mutate_symmetric_connect, 0, 100).build();
+                ui.slider_int(im_str!("Connect"), &mut state.mutate_connect, 0, 100).build();
+                ui.slider_int(im_str!("Disconnect"), &mut state.mutate_disconnect, 0, 100).build();
+                ui.slider_int(im_str!("Sym Join"), &mut state.mutate_symmetric_join, 0, 100).build();
+                ui.slider_int(im_str!("Sym Fork"), &mut state.mutate_symmetric_fork, 0, 100).build();
+                ui.slider_int(im_str!("Sym Connect"), &mut state.mutate_symmetric_connect, 0, 100).build();
             }
             if ui.collapsing_header(im_str!("Global Mutation")).build() {
-                ui.slider_f32(im_str!("Global Mutation Rate"), &mut state.global_mutation_rate,
+                ui.slider_float(im_str!("Global Mutation Rate"), &mut state.global_mutation_rate,
                 0.0,
                 1.0)
                     .build();
-                ui.slider_f32(im_str!("Element Mutation Rate"), &mut state.global_element_mutation,
+                ui.slider_float(im_str!("Element Mutation Rate"), &mut state.global_element_mutation,
                 0.0,
                 1.0)
                     .build();
