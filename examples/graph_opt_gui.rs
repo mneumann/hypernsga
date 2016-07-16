@@ -1,7 +1,6 @@
 extern crate hypernsga;
 extern crate nsga2;
 extern crate rand;
-extern crate criterion_stats;
 
 #[macro_use]
 extern crate glium;
@@ -27,7 +26,6 @@ use nsga2::selection::{SelectNSGP,SelectNSGPMod};
 use nsga2::population::{UnratedPopulation, RatedPopulation, RankedPopulation};
 use nsga2::multi_objective::MultiObjective;
 use std::f64::INFINITY;
-use criterion_stats::univariate::Sample;
 use std::env;
 use std::mem;
 use rand::Rng;
@@ -1013,23 +1011,13 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
             auto_reset_counter: 0,
         };
 
-        let mut program_substrate: Option<glium::Program> = None;
-        let mut program_vertex: Option<glium::Program> = None;
-
+        let mut program_substrate: glium::Program = glium::Program::from_source(&support.display, VERTEX_SHADER_SUBSTRATE, FRAGMENT_SHADER_SUBSTRATE, None).unwrap();
+        let mut program_vertex: glium::Program = glium::Program::from_source(&support.display, VERTEX_SHADER_VERTEX, FRAGMENT_SHADER_VERTEX, None).unwrap();
+            
         loop {
             {
-                support.render(CLEAR_COLOR, |display, imgui, renderer, target, delta_f| {
-
-                    if program_substrate.is_none() {
-                        program_substrate = Some(glium::Program::from_source(display, VERTEX_SHADER_SUBSTRATE, FRAGMENT_SHADER_SUBSTRATE, None).unwrap());
-                    }
-
-                    if program_vertex.is_none() {
-                        program_vertex = Some(glium::Program::from_source(display, VERTEX_SHADER_VERTEX, FRAGMENT_SHADER_VERTEX, None).unwrap());
-                    }
-
+                support.render(CLEAR_COLOR, |ui, display, target| {
                     const N: usize = 4;
-
                     let (width, height) = target.get_dimensions();
                     match state.view { 
                         ViewMode::BestDetailed => {
@@ -1037,11 +1025,11 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
 
                             let (substrate_width, substrate_height) = (400, 400);
 
-                            render_graph(display, target, best_ind.genome(), &expression, program_substrate.as_ref().unwrap(), &state, &substrate_config,
+                            render_graph(display, target, best_ind.genome(), &expression, &program_substrate, &state, &substrate_config,
                             glium::Rect {left: 0, bottom: 0, width: substrate_width, height: substrate_height}, 2.0, 5.0);
 
 
-                            render_cppn(display, target, best_ind.genome(), &expression, program_vertex.as_ref().unwrap(), &state, &substrate_config,
+                            render_cppn(display, target, best_ind.genome(), &expression, &program_vertex, &state, &substrate_config,
                             glium::Rect {left: substrate_width, bottom: 0, width: width-substrate_width, height: height});
                         }
                         ViewMode::Overview => { 
@@ -1063,7 +1051,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                                     }
                                     let rect = glium::Rect {left: (x as u32)*width/(2*N as u32), bottom: (y as u32)*height/(2*N as u32), width: width/(2*N as u32), height: height/(2*N as u32)};
                                     let genome = indiv[indices[i]].genome();
-                                    render_cppn(display, target, genome, &expression, program_vertex.as_ref().unwrap(), &state, &substrate_config, rect);
+                                    render_cppn(display, target, genome, &expression, &program_vertex, &state, &substrate_config, rect);
                                     i += 1;
                                 }
                             }
@@ -1076,7 +1064,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                                     }
                                     let rect = glium::Rect {left: (x as u32)*width/(2*N as u32), bottom: (y as u32)*height/(2*N as u32), width: width/(2*N as u32), height: height/(2*N as u32)};
                                     let genome = indiv[indices[i]].genome();
-                                    render_graph(display, target, genome, &expression, program_substrate.as_ref().unwrap(), &state, &substrate_config, rect, 1.0, 2.5);
+                                    render_graph(display, target, genome, &expression, &program_substrate, &state, &substrate_config, rect, 1.0, 2.5);
                                     i += 1;
                                 }
                             }
@@ -1103,21 +1091,17 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                                     let rect = glium::Rect {left: (x as u32)*width/(2*N as u32), bottom: (y as u32)*height/(2*N as u32), width: width/(2*N as u32), height: height/(2*N as u32)};
                                     let genome = indiv[indices[i]].genome();
                                     if let ViewMode::CppnOverview = state.view {
-                                        render_cppn(display, target, genome, &expression, program_vertex.as_ref().unwrap(), &state, &substrate_config, rect);
+                                        render_cppn(display, target, genome, &expression, &program_vertex, &state, &substrate_config, rect);
                                     } else {
-                                        render_graph(display, target, genome, &expression, program_substrate.as_ref().unwrap(), &state, &substrate_config, rect, 1.0, 2.5);
+                                        render_graph(display, target, genome, &expression, &program_substrate, &state, &substrate_config, rect, 1.0, 2.5);
                                     }
                                     i += 1;
                                 }
                             }
                         }
                     }
-
-                    let ui = imgui.frame(width, height, delta_f);
-                    gui(&ui, &mut state, &parents);
-                    renderer.render(target, ui).unwrap();
-                }
-                );
+                    gui(ui, &mut state, &parents);
+                });
 
                 let active = support.update_events();
                 if !active {

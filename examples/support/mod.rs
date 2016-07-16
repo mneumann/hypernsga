@@ -1,15 +1,14 @@
 // Adapted from https://github.com/Gekkio/imgui-rs/blob/master/examples/support/mod.rs 
-use glium::{DisplayBuild, Surface};
+use glium::{DisplayBuild, Surface, Frame};
 use glium::backend::glutin_backend::GlutinFacade;
 use glium::glutin;
-use glium::glutin::{ElementState, Event, MouseButton, MouseScrollDelta, VirtualKeyCode};
+use glium::glutin::{ElementState, Event, MouseButton, MouseScrollDelta, VirtualKeyCode, TouchPhase};
 use imgui::{ImGui, Ui, ImGuiKey};
 use imgui::glium_renderer::Renderer;
 use time::SteadyTime;
-use glium;
 
 pub struct Support {
-    display: GlutinFacade,
+    pub display: GlutinFacade,
     imgui: ImGui,
     renderer: Renderer,
     last_frame: SteadyTime,
@@ -54,33 +53,39 @@ impl Support {
             last_frame: SteadyTime::now(),
             mouse_pos: (0, 0),
             mouse_pressed: (false, false, false),
-            mouse_wheel: 0.0,
+            mouse_wheel: 0.0
         }
     }
 
     pub fn update_mouse(&mut self) {
-        self.imgui.set_mouse_pos(self.mouse_pos.0 as f32, self.mouse_pos.1 as f32);
+        let scale = self.imgui.display_framebuffer_scale();
+        self.imgui.set_mouse_pos(self.mouse_pos.0 as f32 / scale.0, self.mouse_pos.1 as f32 / scale.1);
         self.imgui.set_mouse_down(&[self.mouse_pressed.0, self.mouse_pressed.1, self.mouse_pressed.2, false, false]);
-        self.imgui.set_mouse_wheel(self.mouse_wheel);
+        self.imgui.set_mouse_wheel(self.mouse_wheel / scale.1);
+        self.mouse_wheel = 0.0;
     }
 
-    pub fn render<'ui, 'a: 'ui , F: FnMut(&GlutinFacade, &mut ImGui/*&Ui<'ui>*/, &mut Renderer, &mut glium::Frame, f32)>(
-            &'a mut self, clear_color: (f32, f32, f32, f32), mut f: F)
-    {
+    pub fn render<F: FnMut(&Ui, &GlutinFacade, &mut Frame)>(&mut self, clear_color: (f32, f32, f32, f32), mut run_ui: F) {
         let now = SteadyTime::now();
         let delta = now - self.last_frame;
         let delta_f = delta.num_nanoseconds().unwrap() as f32 / 1_000_000_000.0;
         self.last_frame = now;
 
         self.update_mouse();
-        self.mouse_wheel = 0.0;
 
         let mut target = self.display.draw();
-
         target.clear_color(clear_color.0, clear_color.1,
                            clear_color.2, clear_color.3);
 
-        f(&self.display, &mut self.imgui, &mut self.renderer, &mut target, delta_f);
+        let window = self.display.get_window().unwrap();
+        let size_points = window.get_inner_size_points().unwrap();
+        let size_pixels = window.get_inner_size_pixels().unwrap();
+
+        let ui = self.imgui.frame(size_points, size_pixels, delta_f);
+
+        run_ui(&ui, &self.display, &mut target);
+
+        self.renderer.render(&mut target, ui).unwrap();
 
         target.finish().unwrap();
     }
@@ -117,18 +122,22 @@ impl Support {
                             self.imgui.set_key_shift(pressed),
                         Some(VirtualKeyCode::LAlt) | Some(VirtualKeyCode::RAlt) =>
                             self.imgui.set_key_alt(pressed),
+                        Some(VirtualKeyCode::LWin) | Some(VirtualKeyCode::RWin) =>
+                            self.imgui.set_key_super(pressed),
                         _ => {},
                     }
                 },
-                Event::MouseMoved(x,y) => self.mouse_pos = (x,y),
+                Event::MouseMoved(x, y) => self.mouse_pos = (x, y),
                 Event::MouseInput(state, MouseButton::Left) =>
                     self.mouse_pressed.0 = state == ElementState::Pressed,
                 Event::MouseInput(state, MouseButton::Right) =>
                     self.mouse_pressed.1 = state == ElementState::Pressed,
                 Event::MouseInput(state, MouseButton::Middle) =>
                     self.mouse_pressed.2 = state == ElementState::Pressed,
-                Event::MouseWheel(MouseScrollDelta::LineDelta(_, y), _) => self.mouse_wheel = y,
-                Event::MouseWheel(MouseScrollDelta::PixelDelta(_, y), _) => self.mouse_wheel = y,
+                Event::MouseWheel(MouseScrollDelta::LineDelta(_, y), TouchPhase::Moved) =>
+                    self.mouse_wheel = y,
+                Event::MouseWheel(MouseScrollDelta::PixelDelta(_, y), TouchPhase::Moved) =>
+                    self.mouse_wheel = y,
                 Event::ReceivedCharacter(c) => self.imgui.add_input_character(c),
                 _ => ()
             }

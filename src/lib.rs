@@ -1,6 +1,3 @@
-#![feature(associated_consts)]
-#![feature(iter_arith)]
-
 extern crate cppn as cppn_ext;
 extern crate acyclic_network;
 extern crate nsga2;

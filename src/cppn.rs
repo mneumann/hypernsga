@@ -51,7 +51,7 @@ fn develop_cppn<P, AF, T, V>(cppn: &mut Cppn<CppnNode<AF>, Weight, ()>,
 {
     // our CPPN has at least two outputs: link weight 1, link expression. optional: link weight 2, node weight
     assert!(cppn.output_count() >= 2);
-    assert!(cppn.input_count() == P::DIMENSIONS * 2);
+    assert!(cppn.input_count() == P::dims() * 2);
 
     let nodes = substrate_config.nodes();
     let links = substrate_config.links();
@@ -259,7 +259,7 @@ impl RandomGenomeCreator {
         // for every dimension we use two inputs e.g. (x1, x2), each for the other end of the
         // connection
 
-        for _d in 0..P::DIMENSIONS {
+        for _d in 0..P::dims() {
             let inp1 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
             let inp2 = genome.add_node(CppnNode::input(GeometricActivationFunction::Linear));
 
@@ -285,7 +285,7 @@ impl RandomGenomeCreator {
         // the CPPN.
         genome.protect_nodes();
 
-        for d in 0..P::DIMENSIONS {
+        for d in 0..P::dims() {
             if let &Some(w) = self.start_symmetry.get(d).unwrap_or(&None) {
                 let sym =
                     genome.add_node(CppnNode::hidden(GeometricActivationFunction::BipolarGaussian));
@@ -480,7 +480,7 @@ impl PopulationFitness {
         let total_age: usize = population.individuals()
                                          .iter()
                                          .map(|ind| ind.genome().age(current_iteration))
-                                         .sum::<usize>();
+                                         .fold(0, |acc, x| acc+x);
         let avg_age = (total_age as f64) / n as f64;
 
         // set age_diversity
