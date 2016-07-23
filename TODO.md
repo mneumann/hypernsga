@@ -21,3 +21,6 @@
 - [ ] Add a fourth objective: Mutation work, which describes how much mutation has happened
       since the beginning for that individual.
 - [ ] When adding a link, use a fixed weight for the second link
+- [ ] The CPPNs we use, sum all inputs. This way, we cannot
+      represent e.g. ```sin(x) * sin(y)```. Add aggregation functions/nodes,
+      which can specify arbitrary functions on the inputs.
