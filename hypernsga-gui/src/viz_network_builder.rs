@@ -22,17 +22,7 @@ impl NetworkBuilder for VizNetworkBuilder {
 
     fn add_node(&mut self, node: &Node<Self::POS, Self::NT>, _param: f64) {
         assert!(node.index == self.point_list.len());
-        let color = match node.node_info {
-            Neuron::Input => [0.0, 1.0, 0.0, 1.0],
-            Neuron::Hidden => [0.0, 0.0, 0.0, 1.0],
-            Neuron::Output => [1.0, 0.0, 0.0, 1.0],
-        };
-        self.point_list.push(Vertex {
-            position: [node.position.x() as f32,
-            node.position.y() as f32,
-            node.position.z() as f32],
-            color: color,
-        });
+        self.point_list.push(Vertex::from(node));
     }
 
     fn add_link(&mut self,
