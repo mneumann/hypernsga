@@ -67,4 +67,3 @@ pub fn render_graph(display: &GlutinFacade, target: &mut glium::Frame, genome: &
     let point_index_buffer = glium::index::NoIndices(PrimitiveType::Points);
     target.draw(&vertex_buffer, &point_index_buffer, program, &uniforms_substrate, &draw_parameters_substrate).unwrap();
 }
-
