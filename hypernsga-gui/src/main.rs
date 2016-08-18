@@ -38,54 +38,11 @@ pub use vertex::Vertex;
 mod support;
 mod viz_network_builder;
 mod vertex;
+mod shaders;
 
 use viz_network_builder::VizNetworkBuilder;
 
 const CLEAR_COLOR: (f32, f32, f32, f32) = (1.0, 1.0, 1.0, 1.0);
-
-
-const VERTEX_SHADER_SUBSTRATE: &'static str = "
-                    #version 140
-                    uniform mat4 matrix;
-                    uniform mat4 perspective;
-                    in vec3 position;
-                    in vec4 color;
-                    out vec4 fl_color;
-                    void main() {
-                        gl_Position = perspective * matrix * vec4(position, 1.0);
-                        fl_color = color;
-                    }
-                ";
-
-const FRAGMENT_SHADER_SUBSTRATE: &'static str = "
-                    #version 140
-                    in vec4 fl_color;
-                    out vec4 color;
-                    void main() {
-                        color = fl_color;
-                    }
-                ";
-
-const VERTEX_SHADER_VERTEX: &'static str = "
-                    #version 140
-                    uniform mat4 matrix;
-                    in vec3 position;
-                    in vec4 color;
-                    out vec4 fl_color;
-                    void main() {
-                        gl_Position = matrix * vec4(position, 1.0);
-                        fl_color = color;
-                    }
-";
-
-const FRAGMENT_SHADER_VERTEX: &'static str = "
-                    #version 140
-                    in vec4 fl_color;
-                    out vec4 color;
-                    void main() {
-                        color = fl_color;
-                    }
-";
 
 pub struct GMLNetworkBuilder<'a, W: Write+'a> {
     wr: Option<&'a mut W>
@@ -952,8 +909,8 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
             auto_reset_counter: 0,
         };
 
-        let program_substrate: glium::Program = glium::Program::from_source(&support.display, VERTEX_SHADER_SUBSTRATE, FRAGMENT_SHADER_SUBSTRATE, None).unwrap();
-        let program_vertex: glium::Program = glium::Program::from_source(&support.display, VERTEX_SHADER_VERTEX, FRAGMENT_SHADER_VERTEX, None).unwrap();
+        let program_substrate: glium::Program = glium::Program::from_source(&support.display, shaders::VERTEX_SHADER_SUBSTRATE, shaders::FRAGMENT_SHADER_SUBSTRATE, None).unwrap();
+        let program_vertex: glium::Program = glium::Program::from_source(&support.display, shaders::VERTEX_SHADER_VERTEX, shaders::FRAGMENT_SHADER_VERTEX, None).unwrap();
             
         loop {
             {
