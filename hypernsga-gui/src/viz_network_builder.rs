@@ -1,6 +1,6 @@
 use hypernsga::network_builder::NetworkBuilder;
 use super::Vertex;
-use hypernsga::domain_graph::{Neuron};
+use hypernsga::domain_graph::Neuron;
 use hypernsga::substrate::{Position3d, Node};
 
 pub struct VizNetworkBuilder {
