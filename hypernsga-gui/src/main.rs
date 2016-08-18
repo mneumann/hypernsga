@@ -33,10 +33,11 @@ use std::io::Write;
 use std::fs::File;
 use glium::backend::glutin_backend::GlutinFacade;
 use std::cmp::Ordering;
-use std::convert::From;
+pub use vertex::Vertex;
 
 mod support;
 mod viz_network_builder;
+mod vertex;
 
 use viz_network_builder::VizNetworkBuilder;
 
@@ -85,30 +86,6 @@ const FRAGMENT_SHADER_VERTEX: &'static str = "
                         color = fl_color;
                     }
 ";
-
-#[derive(Copy, Clone)]
-pub struct Vertex {
-    position: [f32; 3],
-    color: [f32; 4],
-}
-
-impl<'a> From<&'a Node<Position3d, Neuron>> for Vertex {
-        fn from(node: &'a Node<Position3d, Neuron>) -> Self {
-            let color = match node.node_info {
-                Neuron::Input => [0.0, 1.0, 0.0, 1.0],
-                Neuron::Hidden => [0.0, 0.0, 0.0, 1.0],
-                Neuron::Output => [1.0, 0.0, 0.0, 1.0],
-            };
-            Vertex {
-                position: [node.position.x() as f32,
-                node.position.y() as f32,
-                node.position.z() as f32],
-                color: color,
-            }
-        }
-}
-
-implement_vertex!(Vertex, position, color);
 
 pub struct GMLNetworkBuilder<'a, W: Write+'a> {
     wr: Option<&'a mut W>
