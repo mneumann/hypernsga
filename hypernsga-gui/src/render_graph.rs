@@ -7,14 +7,22 @@ use hypernsga::cppn::{G, Expression};
 use hypernsga::substrate::{SubstrateConfiguration, Position3d};
 use hypernsga::domain_graph::Neuron;
 use hypernsga::network_builder::NetworkBuilder;
-use super::State;
+
+pub struct Transformation {
+    pub rotate_x: f32,
+    pub rotate_y: f32,
+    pub rotate_z: f32,
+    pub scale_x: f32,
+    pub scale_y: f32,
+    pub scale_z: f32
+}
 
 pub fn render_graph(display: &GlutinFacade,
                     target: &mut glium::Frame,
                     genome: &G,
                     expression: &Expression,
                     program: &glium::Program,
-                    state: &State,
+                    transformation: &Transformation,
                     substrate_config: &SubstrateConfiguration<Position3d, Neuron>,
                     viewport: glium::Rect,
                     line_width: f32,
@@ -29,12 +37,12 @@ pub fn render_graph(display: &GlutinFacade,
                                                     &network_builder.link_index_list)
         .unwrap();
 
-    let rx = state.rotate_substrate_x.to_radians();
-    let ry = state.rotate_substrate_y.to_radians();
-    let rz = state.rotate_substrate_z.to_radians();
-    let sx = state.scale_substrate_x;
-    let sy = state.scale_substrate_y;
-    let sz = state.scale_substrate_z;
+    let rx = transformation.rotate_x.to_radians();
+    let ry = transformation.rotate_y.to_radians();
+    let rz = transformation.rotate_z.to_radians();
+    let sx = transformation.scale_x;
+    let sy = transformation.scale_y;
+    let sz = transformation.scale_z;
 
     let perspective = {
         [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0f32]]

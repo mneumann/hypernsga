@@ -30,7 +30,7 @@ use std::io::Write;
 use std::fs::File;
 use std::cmp::Ordering;
 pub use vertex::Vertex;
-use render_graph::render_graph;
+use render_graph::{render_graph, Transformation};
 use render_cppn::render_cppn;
 use imgui_ui::gui;
 pub use ui_state::{State, Action, ViewMode};
@@ -200,6 +200,17 @@ fn fitness<P>(genome: &G,
         age_diversity: 0.0, // will be calculated in `population_metric`
         saturation: sat.sum(),
         complexity: genome.complexity(),
+    }
+}
+
+fn transformation_from_state(state: &State) -> Transformation {
+    Transformation {
+        rotate_x: state.rotate_substrate_x,
+        rotate_y: state.rotate_substrate_y,
+        rotate_z: state.rotate_substrate_z,
+        scale_x: state.scale_substrate_x,
+        scale_y: state.scale_substrate_y,
+        scale_z: state.scale_substrate_z
     }
 }
 
@@ -411,7 +422,7 @@ fn main() {
                                      best_ind.genome(),
                                      &expression,
                                      &program_substrate,
-                                     &state,
+                                     &transformation_from_state(&state),
                                      &substrate_config,
                                      glium::Rect {
                                          left: 0,
@@ -495,7 +506,7 @@ fn main() {
                                                  genome,
                                                  &expression,
                                                  &program_substrate,
-                                                 &state,
+                                                 &transformation_from_state(&state),
                                                  &substrate_config,
                                                  rect,
                                                  1.0,
@@ -549,7 +560,7 @@ fn main() {
                                                  genome,
                                                  &expression,
                                                  &program_substrate,
-                                                 &state,
+                                                 &transformation_from_state(&state),
                                                  &substrate_config,
                                                  rect,
                                                  1.0,
