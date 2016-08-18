@@ -28,10 +28,10 @@ use self::support::Support;
 use glium::Surface;
 use std::io::Write;
 use std::fs::File;
-use std::cmp::Ordering;
 pub use vertex::Vertex;
-use render_graph::{render_graph, Transformation};
-use render_cppn::render_cppn;
+pub use render_graph::{render_graph, Transformation};
+pub use render_cppn::render_cppn;
+pub use render_view::render_view;
 use imgui_ui::gui;
 pub use ui_state::{State, Action, ViewMode};
 
@@ -42,6 +42,7 @@ mod shaders;
 mod substrate_configuration;
 mod render_graph;
 mod render_cppn;
+mod render_view;
 mod imgui_ui;
 mod ui_state;
 
@@ -409,168 +410,10 @@ fn main() {
     loop {
         {
             support.render(CLEAR_COLOR, |ui, display, target| {
-                const N: usize = 4;
                 let (width, height) = target.get_dimensions();
-                match state.view { 
-                    ViewMode::BestDetailed => {
-                        let best_ind = &parents.individuals()[best_individual_i];
-
-                        let (substrate_width, substrate_height) = (400, 400);
-
-                        render_graph(display,
-                                     target,
-                                     best_ind.genome(),
-                                     &expression,
-                                     &program_substrate,
-                                     &transformation_from_state(&state),
-                                     &substrate_config,
-                                     glium::Rect {
-                                         left: 0,
-                                         bottom: 0,
-                                         width: substrate_width,
-                                         height: substrate_height,
-                                     },
-                                     2.0,
-                                     5.0);
-
-
-                        render_cppn(display,
-                                    target,
-                                    best_ind.genome(),
-                                    &program_vertex,
-                                    glium::Rect {
-                                        left: substrate_width,
-                                        bottom: 0,
-                                        width: width - substrate_width,
-                                        height: height,
-                                    });
-                    }
-                    ViewMode::Overview => {
-                        let indiv = parents.individuals();
-                        let mut indices: Vec<_> = (0..indiv.len()).collect();
-                        indices.sort_by(|&i, &j| {
-                            match indiv[i]
-                                .fitness()
-                                .domain_fitness
-                                .partial_cmp(&indiv[j].fitness().domain_fitness)
-                                .unwrap()
-                                .reverse() {
-                                Ordering::Equal => {
-                                    indiv[i]
-                                        .fitness()
-                                        .behavioral_diversity
-                                        .partial_cmp(&indiv[j].fitness().behavioral_diversity)
-                                        .unwrap()
-                                        .reverse()
-                                }
-                                a => a,
-                            }
-                        });
-
-                        {
-                            let mut i = 0;
-                            'outer1: for y in 0..N {
-                                for x in 0..(2 * N) {
-                                    if i >= indiv.len() {
-                                        break 'outer1;
-                                    }
-                                    let rect = glium::Rect {
-                                        left: (x as u32) * width / (2 * N as u32),
-                                        bottom: (y as u32) * height / (2 * N as u32),
-                                        width: width / (2 * N as u32),
-                                        height: height / (2 * N as u32),
-                                    };
-                                    let genome = indiv[indices[i]].genome();
-                                    render_cppn(display, target, genome, &program_vertex, rect);
-                                    i += 1;
-                                }
-                            }
-                        }
-
-                        {
-                            let mut i = 0;
-                            'outer2: for y in N..(2 * N) {
-                                for x in 0..(2 * N) {
-                                    if i >= indiv.len() {
-                                        break 'outer2;
-                                    }
-                                    let rect = glium::Rect {
-                                        left: (x as u32) * width / (2 * N as u32),
-                                        bottom: (y as u32) * height / (2 * N as u32),
-                                        width: width / (2 * N as u32),
-                                        height: height / (2 * N as u32),
-                                    };
-                                    let genome = indiv[indices[i]].genome();
-                                    render_graph(display,
-                                                 target,
-                                                 genome,
-                                                 &expression,
-                                                 &program_substrate,
-                                                 &transformation_from_state(&state),
-                                                 &substrate_config,
-                                                 rect,
-                                                 1.0,
-                                                 2.5);
-                                    i += 1;
-                                }
-                            }
-                        }
-
-                    }
-
-                    ViewMode::CppnOverview | ViewMode::GraphOverview => {
-                        let indiv = parents.individuals();
-                        let mut indices: Vec<_> = (0..indiv.len()).collect();
-                        indices.sort_by(|&i, &j| {
-                            match indiv[i]
-                                .fitness()
-                                .domain_fitness
-                                .partial_cmp(&indiv[j].fitness().domain_fitness)
-                                .unwrap()
-                                .reverse() {
-                                Ordering::Equal => {
-                                    indiv[i]
-                                        .fitness()
-                                        .behavioral_diversity
-                                        .partial_cmp(&indiv[j].fitness().behavioral_diversity)
-                                        .unwrap()
-                                        .reverse()
-                                }
-                                a => a,
-                            }
-                        });
-                        let mut i = 0;
-                        'outer: for y in 0..(2 * N) {
-                            for x in 0..(2 * N) {
-                                if i >= indiv.len() {
-                                    break 'outer;
-                                }
-                                let rect = glium::Rect {
-                                    left: (x as u32) * width / (2 * N as u32),
-                                    bottom: (y as u32) * height / (2 * N as u32),
-                                    width: width / (2 * N as u32),
-                                    height: height / (2 * N as u32),
-                                };
-                                let genome = indiv[indices[i]].genome();
-                                if let ViewMode::CppnOverview = state.view {
-                                    render_cppn(display, target, genome, &program_vertex, rect);
-                                } else {
-                                    render_graph(display,
-                                                 target,
-                                                 genome,
-                                                 &expression,
-                                                 &program_substrate,
-                                                 &transformation_from_state(&state),
-                                                 &substrate_config,
-                                                 rect,
-                                                 1.0,
-                                                 2.5);
-                                }
-                                i += 1;
-                            }
-                        }
-                    }
-                }
+                render_view(state.view, &parents, best_individual_i,
+                            display, target, &expression, &program_substrate, &program_vertex, &substrate_config,
+                            &transformation_from_state(&state), 4, width, height);
                 gui(ui, &mut state, &parents);
             });
 
