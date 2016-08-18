@@ -7,7 +7,6 @@ extern crate glium;
 #[macro_use]
 extern crate imgui;
 extern crate time;
-extern crate libc;
 extern crate graph_layout;
 
 use hypernsga::graph;
@@ -27,12 +26,9 @@ use nsga2::population::{UnratedPopulation, RatedPopulation, RankedPopulation};
 use nsga2::multi_objective::MultiObjective;
 use std::f64::INFINITY;
 use std::env;
-use std::mem;
-use rand::Rng;
 
 use imgui::*;
 use self::support::Support;
-use libc::*;
 use glium::Surface;
 use glium::index::PrimitiveType;
 use std::io::Write;
