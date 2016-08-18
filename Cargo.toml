@@ -24,14 +24,3 @@ closed01 = "0.4"
 asexp = "0.3"
 graph-io-gml = "0.1"
 petgraph = "0.2"
-
-
-[dev-dependencies]
-#criterion-stats = "0.1"
-#pcg = { git = "https://github.com/codahale/pcg.git" }
-imgui = "0.0.9"
-glium = "0.14"
-time = "0.1"
-piston_window = "0.47"
-libc = "0.2"
-graph-layout = { git = "https://github.com/mneumann/graph-layout-rs" }

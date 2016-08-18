@@ -1,0 +1,22 @@
+[package]
+name = "hypernsga-gui"
+version = "0.0.1"
+authors = ["Michael Neumann <mneumann@ntecs.de>"]
+license = "MIT"
+repository = "https://github.com/mneumann/hypernsga"
+description = "GUI for Hyperneat (Hyper-cube based neural network optimization using NSGA2)"
+keywords = ["evolution", "neuro", "net", "algorithm", "cppn"]
+
+include = ["src/*.rs", "Cargo.toml"]
+
+[dependencies]
+
+hypernsga = { path = ".." }
+nsga2 = {git = "https://github.com/mneumann/nsga2-rs"}
+rand = "0.3"
+
+glium = "0.14"
+imgui = "0.0.9"
+time = "0.1"
+libc = "0.2"
+graph-layout = { git = "https://github.com/mneumann/graph-layout-rs" }

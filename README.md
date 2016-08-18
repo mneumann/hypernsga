@@ -11,3 +11,11 @@ Evolutionary Hyper-cube based neural net optimization using NSGA2 (Non Dominated
 ## Installation
 
 Requires Rust >= 1.9.0
+
+
+## Running
+
+```
+cd hyperneat-gui
+cargo run --release -- ../nets/skorpion.gml
+```
