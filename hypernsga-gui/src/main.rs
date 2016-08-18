@@ -34,14 +34,14 @@ use std::fs::File;
 use glium::backend::glutin_backend::GlutinFacade;
 use std::cmp::Ordering;
 pub use vertex::Vertex;
+use render_graph::render_graph;
 
 mod support;
 mod viz_network_builder;
 mod vertex;
 mod shaders;
 mod substrate_configuration;
-
-use viz_network_builder::VizNetworkBuilder;
+mod render_graph;
 
 const CLEAR_COLOR: (f32, f32, f32, f32) = (1.0, 1.0, 1.0, 1.0);
 
@@ -170,7 +170,7 @@ enum ViewMode {
 }
 
 #[derive(Debug)]
-struct State {
+pub struct State {
     iteration: usize,
     best_fitness: f64,
     running: bool,
@@ -199,12 +199,12 @@ struct State {
     nm_iters: i32,
     nm_eps: f32,
 
-    rotate_substrate_x: f32,
-    rotate_substrate_y: f32,
-    rotate_substrate_z: f32,
-    scale_substrate_x: f32,
-    scale_substrate_y: f32,
-    scale_substrate_z: f32,
+    pub rotate_substrate_x: f32,
+    pub rotate_substrate_y: f32,
+    pub rotate_substrate_z: f32,
+    pub scale_substrate_x: f32,
+    pub scale_substrate_y: f32,
+    pub scale_substrate_z: f32,
 
     link_expression_min: f32,
     link_expression_max: f32,
@@ -243,65 +243,6 @@ enum Action {
     None,
     ExportBest,
     ResetNet,
-}
-
-fn render_graph(display: &GlutinFacade, target: &mut glium::Frame, genome: &G, expression: &Expression, program: &glium::Program, state: &State,
-                substrate_config: &SubstrateConfiguration<Position3d, Neuron>, viewport: glium::Rect, line_width: f32, point_size: f32) {
-    let mut network_builder = VizNetworkBuilder::new();
-    let (_, _, _) = expression.express(&genome,
-                                       &mut network_builder,
-                                       &substrate_config);
-
-    let vertex_buffer = glium::VertexBuffer::new(display, &network_builder.point_list).unwrap();
-
-    let line_index_buffer  = glium::IndexBuffer::new(display, PrimitiveType::LinesList,
-                                                     &network_builder.link_index_list).unwrap();
-
-    let rx = state.rotate_substrate_x.to_radians();
-    let ry = state.rotate_substrate_y.to_radians();
-    let rz = state.rotate_substrate_z.to_radians();
-    let sx = state.scale_substrate_x;
-    let sy = state.scale_substrate_y;
-    let sz = state.scale_substrate_z;
-
-    let perspective = {
-        [
-            [1.0, 0.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0, 0.0],
-            [0.0, 0.0, 1.0, 0.0],
-            [0.0, 0.0, 0.0, 1.0f32],
-        ]
-    };
-
-    let uniforms_substrate = uniform! {
-        matrix: [
-            [sx*ry.cos()*rz.cos(), -ry.cos()*rz.sin(), ry.sin(), 0.0],
-            [rx.cos()*rz.sin() + rx.sin()*ry.sin()*rz.cos(), sy*(rx.cos()*rz.cos() - rx.sin()*ry.sin()*rz.sin()), -rx.sin()*ry.cos(), 0.0],
-            [rx.sin()*rz.sin() - rx.cos()*ry.sin()*rz.cos(), rx.sin()*rz.cos() + rx.cos()*ry.sin()*rz.sin(), sz*rx.cos()*ry.cos(), 0.0],
-            [0.0, 0.0, 0.0, 1.0f32]
-        ],
-        perspective: perspective
-    };
-
-    let draw_parameters_substrate = glium::draw_parameters::DrawParameters {
-        line_width: Some(line_width),
-        blend: glium::Blend::alpha_blending(),
-        smooth: Some(glium::draw_parameters::Smooth::Nicest),
-        viewport: Some(viewport),
-        .. Default::default()
-    };
-
-    // substrate
-    target.draw(&vertex_buffer, &line_index_buffer, program, &uniforms_substrate, &draw_parameters_substrate).unwrap();
-
-    let draw_parameters_substrate = glium::draw_parameters::DrawParameters {
-        point_size: Some(point_size),
-        viewport: Some(viewport),
-        .. Default::default()
-    };
-
-    let point_index_buffer = glium::index::NoIndices(PrimitiveType::Points);
-    target.draw(&vertex_buffer, &point_index_buffer, program, &uniforms_substrate, &draw_parameters_substrate).unwrap();
 }
 
 fn render_cppn(display: &GlutinFacade, target: &mut glium::Frame, genome: &G, program: &glium::Program, viewport: glium::Rect) {
