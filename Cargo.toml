@@ -7,7 +7,7 @@ repository = "https://github.com/mneumann/hypernsga"
 description = "Hyper-cube based neural network optimization using NSGA2"
 keywords = ["evolution", "neuro", "net", "algorithm", "cppn"]
 
-include = ["src/*.rs", "Cargo.toml", "LICENSE", "README.md"]
+include = ["src/*.rs", "examples/*.rs", "examples/support/*.rs", "Cargo.toml", "LICENSE", "README.md"]
 
 [dependencies]
 
