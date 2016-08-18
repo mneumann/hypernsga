@@ -18,12 +18,10 @@ use hypernsga::fitness::{Fitness, DomainFitness};
 use hypernsga::mating::MatingMethodWeights;
 use hypernsga::prob::Prob;
 use hypernsga::weight::{WeightPerturbanceMethod, WeightRange};
-use hypernsga::substrate::{Node, NodeSet, Substrate, SubstrateConfiguration, Position, Position3d, Position2d};
-use hypernsga::placement;
+use hypernsga::substrate::{Node, NodeSet, Substrate, SubstrateConfiguration, Position, Position3d};
 use hypernsga::distribute::DistributeInterval;
-use nsga2::selection::{SelectNSGP,SelectNSGPMod};
-use nsga2::population::{UnratedPopulation, RatedPopulation, RankedPopulation};
-use nsga2::multi_objective::MultiObjective;
+use nsga2::selection::{SelectNSGPMod};
+use nsga2::population::{UnratedPopulation, RankedPopulation};
 use std::f64::INFINITY;
 use std::env;
 
@@ -371,15 +369,14 @@ fn render_graph(display: &GlutinFacade, target: &mut glium::Frame, genome: &G, e
     target.draw(&vertex_buffer, &point_index_buffer, program, &uniforms_substrate, &draw_parameters_substrate).unwrap();
 }
 
-fn render_cppn(display: &GlutinFacade, target: &mut glium::Frame, genome: &G, expression: &Expression, program: &glium::Program, state: &State,
-               substrate_config: &SubstrateConfiguration<Position3d, Neuron>, viewport: glium::Rect) {
+fn render_cppn(display: &GlutinFacade, target: &mut glium::Frame, genome: &G, program: &glium::Program, viewport: glium::Rect) {
 
     // Layout the CPPN
     let cppn = Cppn::new(genome.network());
     let layers = cppn.group_layers();
     let mut dy = DistributeInterval::new(layers.len(), -1.0, 1.0);
 
-    let mut cppn_node_positions: Vec<_> = genome.network().nodes().iter().map(|node| {
+    let mut cppn_node_positions: Vec<_> = genome.network().nodes().iter().map(|_node| {
         Vertex{position: [0.0, 0.0, 0.0], color: [0.0, 1.0, 0.0, 1.0]}
     }).collect();
 
@@ -465,8 +462,8 @@ fn render_cppn(display: &GlutinFacade, target: &mut glium::Frame, genome: &G, ex
         line_vertices.push(Vertex{position: [dst_x, dst_y, 0.0], color: color});
     });
 
-    let vertex_buffer_cppn = glium::VertexBuffer::new(display, &cppn_node_positions).unwrap();
-    let cppn_index_buffer = glium::IndexBuffer::new(display, PrimitiveType::LinesList, &cppn_links).unwrap();
+    let _vertex_buffer_cppn = glium::VertexBuffer::new(display, &cppn_node_positions).unwrap();
+    let _cppn_index_buffer = glium::IndexBuffer::new(display, PrimitiveType::LinesList, &cppn_links).unwrap();
 
     let triangle_buffer = glium::VertexBuffer::new(display, &cppn_node_triangles).unwrap();
 
@@ -978,8 +975,8 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
             auto_reset_counter: 0,
         };
 
-        let mut program_substrate: glium::Program = glium::Program::from_source(&support.display, VERTEX_SHADER_SUBSTRATE, FRAGMENT_SHADER_SUBSTRATE, None).unwrap();
-        let mut program_vertex: glium::Program = glium::Program::from_source(&support.display, VERTEX_SHADER_VERTEX, FRAGMENT_SHADER_VERTEX, None).unwrap();
+        let program_substrate: glium::Program = glium::Program::from_source(&support.display, VERTEX_SHADER_SUBSTRATE, FRAGMENT_SHADER_SUBSTRATE, None).unwrap();
+        let program_vertex: glium::Program = glium::Program::from_source(&support.display, VERTEX_SHADER_VERTEX, FRAGMENT_SHADER_VERTEX, None).unwrap();
             
         loop {
             {
@@ -996,7 +993,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                             glium::Rect {left: 0, bottom: 0, width: substrate_width, height: substrate_height}, 2.0, 5.0);
 
 
-                            render_cppn(display, target, best_ind.genome(), &expression, &program_vertex, &state, &substrate_config,
+                            render_cppn(display, target, best_ind.genome(), &program_vertex,
                             glium::Rect {left: substrate_width, bottom: 0, width: width-substrate_width, height: height});
                         }
                         ViewMode::Overview => { 
@@ -1010,29 +1007,34 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                                     a => a
                                 }
                             });
-                            let mut i = 0;
-                            'outer: for y in 0..N {
-                                for x in 0..(2*N) {
-                                    if i >= indiv.len() {
-                                        break 'outer;
+
+                            {
+                                let mut i = 0;
+                                'outer1: for y in 0..N {
+                                    for x in 0..(2*N) {
+                                        if i >= indiv.len() {
+                                            break 'outer1;
+                                        }
+                                        let rect = glium::Rect {left: (x as u32)*width/(2*N as u32), bottom: (y as u32)*height/(2*N as u32), width: width/(2*N as u32), height: height/(2*N as u32)};
+                                        let genome = indiv[indices[i]].genome();
+                                        render_cppn(display, target, genome, &program_vertex, rect);
+                                        i += 1;
                                     }
-                                    let rect = glium::Rect {left: (x as u32)*width/(2*N as u32), bottom: (y as u32)*height/(2*N as u32), width: width/(2*N as u32), height: height/(2*N as u32)};
-                                    let genome = indiv[indices[i]].genome();
-                                    render_cppn(display, target, genome, &expression, &program_vertex, &state, &substrate_config, rect);
-                                    i += 1;
                                 }
                             }
 
-                            let mut i = 0;
-                            'outer: for y in N..(2*N) {
-                                for x in 0..(2*N) {
-                                    if i >= indiv.len() {
-                                        break 'outer;
+                            {
+                                let mut i = 0;
+                                'outer2: for y in N..(2*N) {
+                                    for x in 0..(2*N) {
+                                        if i >= indiv.len() {
+                                            break 'outer2;
+                                        }
+                                        let rect = glium::Rect {left: (x as u32)*width/(2*N as u32), bottom: (y as u32)*height/(2*N as u32), width: width/(2*N as u32), height: height/(2*N as u32)};
+                                        let genome = indiv[indices[i]].genome();
+                                        render_graph(display, target, genome, &expression, &program_substrate, &state, &substrate_config, rect, 1.0, 2.5);
+                                        i += 1;
                                     }
-                                    let rect = glium::Rect {left: (x as u32)*width/(2*N as u32), bottom: (y as u32)*height/(2*N as u32), width: width/(2*N as u32), height: height/(2*N as u32)};
-                                    let genome = indiv[indices[i]].genome();
-                                    render_graph(display, target, genome, &expression, &program_substrate, &state, &substrate_config, rect, 1.0, 2.5);
-                                    i += 1;
                                 }
                             }
 
@@ -1058,7 +1060,7 @@ fn gui<'a>(ui: &Ui<'a>, state: &mut State, population: &RankedPopulation<G, Fitn
                                     let rect = glium::Rect {left: (x as u32)*width/(2*N as u32), bottom: (y as u32)*height/(2*N as u32), width: width/(2*N as u32), height: height/(2*N as u32)};
                                     let genome = indiv[indices[i]].genome();
                                     if let ViewMode::CppnOverview = state.view {
-                                        render_cppn(display, target, genome, &expression, &program_vertex, &state, &substrate_config, rect);
+                                        render_cppn(display, target, genome, &program_vertex, rect);
                                     } else {
                                         render_graph(display, target, genome, &expression, &program_substrate, &state, &substrate_config, rect, 1.0, 2.5);
                                     }
@@ -1132,7 +1134,7 @@ graph [
   splines = \"polyline\",
 ];
 node [fontname = Helvetica];
-");
+").unwrap();
 
                             network.each_node_with_index(|node, node_idx| {
                                 let s = 
@@ -1169,7 +1171,7 @@ node [fontname = Helvetica];
                                         format!("shape=box,label={}", node.node_type().activation_function.name())
                                     }
                                 };
-                                writeln!(&mut file, "{} [{}];", node_idx.index(), s);
+                                writeln!(&mut file, "{} [{}];", node_idx.index(), s).unwrap();
                             });
                             network.each_link_ref(|link_ref| {
                                 let w = link_ref.link().weight().0;
@@ -1178,10 +1180,10 @@ node [fontname = Helvetica];
                                 } else {
                                     "red"
                                 };
-                                writeln!(&mut file, "{} -> {} [color={}];", link_ref.link().source_node_index().index(), link_ref.link().target_node_index().index(), color);
+                                writeln!(&mut file, "{} -> {} [color={}];", link_ref.link().source_node_index().index(), link_ref.link().target_node_index().index(), color).unwrap();
                             });
 
-                            writeln!(&mut file, "}}");
+                            writeln!(&mut file, "}}").unwrap();
                         }
  
                     }
