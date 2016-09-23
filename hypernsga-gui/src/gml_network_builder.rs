@@ -1,13 +1,15 @@
 use hypernsga::network_builder::NetworkBuilder;
 use hypernsga::domain_graph::Neuron;
-use hypernsga::substrate::{Position3d, Node};
+use hypernsga::substrate::{Position, Node};
 use std::io::Write;
+use std::marker::PhantomData;
 
-pub struct GMLNetworkBuilder<'a, W: Write + 'a> {
+pub struct GMLNetworkBuilder<'a, W: Write + 'a, P: Position> {
     wr: Option<&'a mut W>,
+    _phantom: PhantomData<P>,
 }
 
-impl<'a, W: Write> GMLNetworkBuilder<'a, W> {
+impl<'a, W: Write, P: Position> GMLNetworkBuilder<'a, W, P> {
     pub fn set_writer(&mut self, wr: &'a mut W) {
         self.wr = Some(wr);
     }
@@ -22,13 +24,13 @@ impl<'a, W: Write> GMLNetworkBuilder<'a, W> {
     }
 }
 
-impl<'a, W: Write> NetworkBuilder for GMLNetworkBuilder<'a, W> {
-    type POS = Position3d;
+impl<'a, W: Write, P: Position> NetworkBuilder for GMLNetworkBuilder<'a, W, P> {
+    type POS = P;
     type NT = Neuron;
     type Output = ();
 
     fn new() -> Self {
-        GMLNetworkBuilder { wr: None }
+        GMLNetworkBuilder { wr: None, _phantom: PhantomData }
     }
 
     fn add_node(&mut self, node: &Node<Self::POS, Self::NT>, _param: f64) {
