@@ -18,7 +18,7 @@ use hypernsga::fitness::{Fitness, DomainFitness};
 use hypernsga::mating::MatingMethodWeights;
 use hypernsga::prob::Prob;
 use hypernsga::weight::{WeightPerturbanceMethod, WeightRange};
-use hypernsga::substrate::{Node, SubstrateConfiguration, Position, Position3d};
+use hypernsga::substrate::{SubstrateConfiguration, Position, Position3d};
 use nsga2::selection::SelectNSGPMod;
 use nsga2::population::{UnratedPopulation};
 use std::f64::INFINITY;
@@ -34,9 +34,13 @@ pub use render_cppn::render_cppn;
 pub use render_view::render_view;
 use imgui_ui::gui;
 pub use ui_state::{State, Action, ViewMode};
+use gml_network_builder::GMLNetworkBuilder;
+use dot_network_builder::DotNetworkBuilder;
 
 mod support;
 mod viz_network_builder;
+mod gml_network_builder;
+mod dot_network_builder;
 mod vertex;
 mod shaders;
 mod substrate_configuration;
@@ -47,129 +51,6 @@ mod imgui_ui;
 mod ui_state;
 
 const CLEAR_COLOR: (f32, f32, f32, f32) = (1.0, 1.0, 1.0, 1.0);
-
-pub struct GMLNetworkBuilder<'a, W: Write + 'a> {
-    wr: Option<&'a mut W>,
-}
-
-impl<'a, W: Write> GMLNetworkBuilder<'a, W> {
-    fn set_writer(&mut self, wr: &'a mut W) {
-        self.wr = Some(wr);
-    }
-    fn begin(&mut self) {
-        let wr = self.wr.as_mut().unwrap();
-        writeln!(wr, "graph [").unwrap();
-        writeln!(wr, "directed 1").unwrap();
-    }
-    fn end(&mut self) {
-        let wr = self.wr.as_mut().unwrap();
-        writeln!(wr, "]").unwrap();
-    }
-}
-
-impl<'a, W: Write> NetworkBuilder for GMLNetworkBuilder<'a, W> {
-    type POS = Position3d;
-    type NT = Neuron;
-    type Output = ();
-
-    fn new() -> Self {
-        GMLNetworkBuilder { wr: None }
-    }
-
-    fn add_node(&mut self, node: &Node<Self::POS, Self::NT>, _param: f64) {
-        let wr = self.wr.as_mut().unwrap();
-        writeln!(wr, "  node [id {} weight {:.1}]", node.index, 0.0).unwrap();
-    }
-
-    fn add_link(&mut self,
-                source_node: &Node<Self::POS, Self::NT>,
-                target_node: &Node<Self::POS, Self::NT>,
-                weight1: f64,
-                _weight2: f64) {
-        let wr = self.wr.as_mut().unwrap();
-        let w = weight1.abs();
-        debug_assert!(w <= 1.0);
-        writeln!(wr,
-                 "  edge [source {} target {} weight {:.1}]",
-                 source_node.index,
-                 target_node.index,
-                 w)
-            .unwrap();
-    }
-
-    fn network(self) -> Self::Output {
-        ()
-    }
-}
-
-
-pub struct DotNetworkBuilder<'a, W: Write + 'a> {
-    wr: Option<&'a mut W>,
-}
-
-impl<'a, W: Write> DotNetworkBuilder<'a, W> {
-    fn set_writer(&mut self, wr: &'a mut W) {
-        self.wr = Some(wr);
-    }
-    fn begin(&mut self) {
-        let wr = self.wr.as_mut().unwrap();
-        writeln!(wr, "digraph {{").unwrap();
-        writeln!(wr, "graph [layout=dot,overlap=false];").unwrap();
-        writeln!(wr, "node [fontname = Helvetica];").unwrap();
-    }
-    fn end(&mut self) {
-        let wr = self.wr.as_mut().unwrap();
-        writeln!(wr, "}}").unwrap();
-    }
-}
-
-impl<'a, W: Write> NetworkBuilder for DotNetworkBuilder<'a, W> {
-    type POS = Position3d;
-    type NT = Neuron;
-    type Output = ();
-
-    fn new() -> Self {
-        DotNetworkBuilder { wr: None }
-    }
-
-    fn add_node(&mut self, node: &Node<Self::POS, Self::NT>, param: f64) {
-        let wr = self.wr.as_mut().unwrap();
-        let rank = match node.node_info {
-            Neuron::Input => ",rank=min",
-            Neuron::Hidden => "",
-            Neuron::Output => ",rank=max",
-        };
-        writeln!(wr,
-                 "  {}[label={},weight={:.1}{}];",
-                 node.index,
-                 node.index,
-                 param,
-                 rank)
-            .unwrap();
-    }
-
-    fn add_link(&mut self,
-                source_node: &Node<Self::POS, Self::NT>,
-                target_node: &Node<Self::POS, Self::NT>,
-                weight1: f64,
-                _weight2: f64) {
-        let wr = self.wr.as_mut().unwrap();
-        let color = if weight1 >= 0.0 { "black" } else { "red" };
-        let w = weight1.abs();
-        // debug_assert!(w <= 1.0);
-        writeln!(wr,
-                 "  {} -> {} [weight={:.2},color={}];",
-                 source_node.index,
-                 target_node.index,
-                 w,
-                 color)
-            .unwrap();
-    }
-
-    fn network(self) -> Self::Output {
-        ()
-    }
-}
 
 struct EvoConfig {
     mu: usize,
