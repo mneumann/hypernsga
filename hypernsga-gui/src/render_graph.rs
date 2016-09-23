@@ -7,15 +7,7 @@ use hypernsga::cppn::{G, Expression};
 use hypernsga::substrate::{SubstrateConfiguration, Position3d};
 use hypernsga::domain_graph::Neuron;
 use hypernsga::network_builder::NetworkBuilder;
-
-pub struct Transformation {
-    pub rotate_x: f32,
-    pub rotate_y: f32,
-    pub rotate_z: f32,
-    pub scale_x: f32,
-    pub scale_y: f32,
-    pub scale_z: f32
-}
+use transformation::Transformation;
 
 pub fn render_graph(display: &GlutinFacade,
                     target: &mut glium::Frame,
