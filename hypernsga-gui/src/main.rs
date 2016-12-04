@@ -34,6 +34,7 @@ use hypernsga::network_builder::gml::GMLNetworkBuilder;
 use hypernsga::network_builder::dot::DotNetworkBuilder;
 use hypernsga::network_builder::viz::VizNetworkBuilder;
 use hypernsga::export::{write_net_gml, write_net_dot, write_cppn_dot};
+use hypernsga::fitness_graphsimilarity::fitness;
 
 // ui
 use conrod::backend::piston::{self, window, Window, WindowEvents, OpenGL};
@@ -59,31 +60,6 @@ struct EvoConfig {
     objectives: Vec<usize>,
 }
 
-fn fitness<P>(genome: &G,
-              expression: &Expression,
-              substrate_config: &SubstrateConfiguration<P, Neuron>,
-              fitness_eval: &GraphSimilarity)
-              -> Fitness
-    where P: Position
-{
-
-    let mut network_builder = NeuronNetworkBuilder::new();
-    let (behavior, connection_cost, sat) =
-        expression.express(genome, &mut network_builder, substrate_config);
-
-    // Evaluate domain specific fitness
-    let domain_fitness = fitness_eval.fitness(network_builder.network());
-
-    Fitness {
-        domain_fitness: domain_fitness,
-        behavioral_diversity: 0.0, // will be calculated in `population_metric`
-        connection_cost: connection_cost,
-        behavior: behavior,
-        age_diversity: 0.0, // will be calculated in `population_metric`
-        saturation: sat.sum(),
-        complexity: genome.complexity(),
-    }
-}
 
 fn transformation_from_state(state: &State) -> Transformation {
     Transformation {
