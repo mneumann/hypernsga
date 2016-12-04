@@ -1,5 +1,8 @@
 use substrate::{Position, Node};
 
+pub mod gml;
+pub mod dot;
+
 /// Used to construct a network (graph) `G` from a CPPN and substrate combination.
 
 pub trait NetworkBuilder {

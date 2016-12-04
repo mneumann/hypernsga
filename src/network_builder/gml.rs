@@ -1,6 +1,6 @@
-use hypernsga::network_builder::NetworkBuilder;
-use hypernsga::domain_graph::Neuron;
-use hypernsga::substrate::{Position, Node};
+use ::network_builder::NetworkBuilder;
+use ::domain_graph::Neuron;
+use ::substrate::{Position, Node};
 use std::io::Write;
 use std::marker::PhantomData;
 

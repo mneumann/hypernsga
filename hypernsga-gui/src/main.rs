@@ -30,8 +30,8 @@ pub use transformation::Transformation;
 //pub use render_cppn::render_cppn;
 //pub use render_view::render_view;
 pub use ui_state::{State, Action, ViewMode};
-use gml_network_builder::GMLNetworkBuilder;
-use dot_network_builder::DotNetworkBuilder;
+use hypernsga::network_builder::gml::GMLNetworkBuilder;
+use hypernsga::network_builder::dot::DotNetworkBuilder;
 
 // ui
 use conrod::backend::piston::{self, window, Window, WindowEvents, OpenGL};
@@ -39,8 +39,6 @@ use conrod::backend::piston::event::UpdateEvent;
 use conrod_ui::{Ids, gui};
 
 mod viz_network_builder;
-mod gml_network_builder;
-mod dot_network_builder;
 mod vertex;
 mod shaders;
 mod substrate_configuration;
