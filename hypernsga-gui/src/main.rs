@@ -1,13 +1,11 @@
 extern crate hypernsga;
 extern crate nsga2;
 extern crate rand;
-
-#[macro_use]
-extern crate glium;
-#[macro_use]
-extern crate imgui;
 extern crate time;
 extern crate graph_layout;
+
+#[macro_use] extern crate conrod;
+extern crate find_folder;
 
 use hypernsga::graph;
 use hypernsga::domain_graph::{Neuron, NeuronNetworkBuilder, GraphSimilarity};
@@ -24,30 +22,33 @@ use nsga2::population::{UnratedPopulation};
 use std::f64::INFINITY;
 use std::env;
 
-use self::support::Support;
-use glium::Surface;
 use std::io::Write;
 use std::fs::File;
 pub use vertex::Vertex;
-pub use render_graph::{render_graph, Transformation};
-pub use render_cppn::render_cppn;
-pub use render_view::render_view;
-use imgui_ui::gui;
+pub use transformation::Transformation;
+//pub use render_graph::render_graph;
+//pub use render_cppn::render_cppn;
+//pub use render_view::render_view;
 pub use ui_state::{State, Action, ViewMode};
 use gml_network_builder::GMLNetworkBuilder;
 use dot_network_builder::DotNetworkBuilder;
 
-mod support;
+// ui
+use conrod::backend::piston::{self, window, Window, WindowEvents, OpenGL};
+use conrod::backend::piston::event::UpdateEvent;
+use conrod_ui::{Ids, gui};
+
 mod viz_network_builder;
 mod gml_network_builder;
 mod dot_network_builder;
 mod vertex;
 mod shaders;
 mod substrate_configuration;
-mod render_graph;
-mod render_cppn;
-mod render_view;
-mod imgui_ui;
+//mod render_graph;
+//mod render_cppn;
+//mod render_view;
+mod conrod_ui;
+mod transformation;
 mod ui_state;
 
 const CLEAR_COLOR: (f32, f32, f32, f32) = (1.0, 1.0, 1.0, 1.0);
@@ -199,9 +200,37 @@ node [fontname = Helvetica];
 
     writeln!(&mut file, "}}").unwrap();
 }
- 
+
 fn main() {
-    let mut support = Support::init();
+    const WIDTH: u32 = 600;
+    const HEIGHT: u32 = 600;
+
+    // Construct the window.
+     let mut window: Window = window::WindowSettings::new("HyperNSGA UI", (WIDTH, HEIGHT))
+        .opengl(OpenGL::V3_2)
+        .exit_on_esc(true)
+        .vsync(true)
+        .samples(4)
+        .build()
+        .unwrap_or_else(|e| { println!("panic {}", e); panic!("Failed to build PistonWindow: {}", e) });
+
+    // Construct our `Ui`.
+    let mut ui = conrod::UiBuilder::new([WIDTH as f64, HEIGHT as f64]).build();
+
+    // Unique identifier for each widget.
+    let ids = Ids::new(ui.widget_id_generator());
+
+    // Add a `Font` to the `Ui`'s `font::Map` from file.
+    let assets = find_folder::Search::KidsThenParents(3, 5).for_folder("assets").unwrap();
+    let font_path = assets.join("fonts/NotoSans/NotoSans-Regular.ttf");
+    ui.fonts.insert_from_file(font_path).unwrap();
+
+    // No text to draw, so we'll just create an empty text texture cache.
+    let mut text_texture_cache =
+        conrod::backend::piston::gfx::GlyphCache::new(&mut window, WIDTH, HEIGHT);
+
+    // The image map describing each of our widget->image mappings (in our case, none).
+    let image_map = conrod::image::Map::new();
 
     let mut rng = rand::thread_rng();
     let graph_file = env::args().nth(1).unwrap();
@@ -377,8 +406,11 @@ fn main() {
         auto_reset: 250,
         auto_reset_enable: false,
         auto_reset_counter: 0,
+
+        view_section_open: false,
     };
 
+    /*
     let program_substrate: glium::Program =
         glium::Program::from_source(&support.display,
                                     shaders::VERTEX_SHADER_SUBSTRATE,
@@ -391,29 +423,40 @@ fn main() {
                                     shaders::FRAGMENT_SHADER_VERTEX,
                                     None)
             .unwrap();
+            */
 
-    loop {
-        {
-            support.render(CLEAR_COLOR, |ui, display, target| {
-                let (width, height) = target.get_dimensions();
-                render_view(state.view, &parents, best_individual_i,
-                            display, target, &expression, &program_substrate, &program_vertex, &substrate_config,
-                            &transformation_from_state(&state), 4, width, height);
-                gui(ui, &mut state, &parents);
-            });
 
-            let active = support.update_events();
-            if !active {
-                break;
+    // Poll events from the window.
+    let mut events = WindowEvents::new();
+    while let Some(event) = window.next_event(&mut events) {
+        // Convert the piston event to a conrod event.
+        if let Some(e) = conrod::backend::piston::window::convert_event(event.clone(), &window) {
+            ui.handle_event(e);
+        }
+
+        event.update(|_| {
+            gui(ui.set_widgets(), &mut state, &ids);
+        });
+
+        window.draw_2d(&event, |c, g| {
+            if let Some(primitives) = ui.draw_if_changed() {
+                fn texture_from_image<T>(img: &T) -> &T { img };
+                conrod::backend::piston::window::draw(c, g, primitives,
+                                                     &mut text_texture_cache,
+                                                     &image_map,
+                                                     texture_from_image);
             }
+        });
 
-            if state.running && state.auto_reset_enable && state.action == Action::None {
-                if state.iteration > state.auto_reset as usize {
-                    println!("Autoreset at {}", state.iteration);
-                    state.action = Action::ResetNet;
-                    state.auto_reset_counter += 1;
-                }
+        // State logic
+
+        if state.running && state.auto_reset_enable && state.action == Action::None {
+            if state.iteration > state.auto_reset as usize {
+                println!("Autoreset at {}", state.iteration);
+                state.action = Action::ResetNet;
+                state.auto_reset_counter += 1;
             }
+        }
 
             match state.action {
                 Action::ExportBest => {
@@ -557,7 +600,6 @@ fn main() {
                 state.best_fitness = best_fitness;
                 state.best_fitness_history.push((state.iteration, state.best_fitness));
             }
-        }
 
         if state.enable_stop && state.best_fitness >= state.stop_when_fitness_above as f64 {
             state.running = false;
@@ -632,4 +674,23 @@ fn main() {
             println!("{}\t{}", state.iteration, total_ns);
         }
     }
+
+/*
+    loop {
+        {
+            /*support.render(CLEAR_COLOR, |ui, display, target| {
+                let (width, height) = target.get_dimensions();
+                render_view(state.view, &parents, best_individual_i,
+                            display, target, &expression, &program_substrate, &program_vertex, &substrate_config,
+                            &transformation_from_state(&state), 4, width, height);
+                gui(ui, &mut state, &parents);
+            });
+
+            let active = support.update_events();
+            if !active {
+                break;
+            }
+            */
+    }
+    */
 }

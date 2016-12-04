@@ -73,4 +73,6 @@ pub struct State {
 
     pub stop_when_fitness_above: f32,
     pub enable_stop: bool,
+
+    pub view_section_open: bool
 }

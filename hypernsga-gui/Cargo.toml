@@ -13,9 +13,8 @@ include = ["src/*.rs", "Cargo.toml"]
 
 hypernsga = { path = ".." }
 nsga2 = {git = "https://github.com/mneumann/nsga2-rs"}
-rand = "0.3"
-
-glium = "0.14"
-imgui = "0.0.9"
-time = "0.1"
 graph-layout = { git = "https://github.com/mneumann/graph-layout-rs" }
+rand = "0.3"
+time = "0.1"
+conrod = "0.47"
+find_folder = "0.3"

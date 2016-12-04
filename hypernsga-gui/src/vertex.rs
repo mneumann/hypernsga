@@ -8,7 +8,7 @@ pub struct Vertex {
     pub color: [f32; 4],
 }
 
-implement_vertex!(Vertex, position, color);
+//implement_vertex!(Vertex, position, color);
 
 impl<'a> From<&'a Node<Position3d, Neuron>> for Vertex {
     fn from(node: &'a Node<Position3d, Neuron>) -> Self {

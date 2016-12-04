@@ -12,7 +12,7 @@ include = ["src/*.rs", "examples/*.rs", "examples/support/*.rs", "Cargo.toml", "
 [dependencies]
 
 rand = "0.3"
-rayon = "0.4"
+rayon = "0.5"
 log = "0.3"
 cppn = "0.1"
 acyclic-network = "0.0.1"
