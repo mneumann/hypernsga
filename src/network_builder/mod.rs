@@ -2,6 +2,7 @@ use substrate::{Position, Node};
 
 pub mod gml;
 pub mod dot;
+pub mod viz;
 
 /// Used to construct a network (graph) `G` from a CPPN and substrate combination.
 

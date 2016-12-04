@@ -1,14 +1,20 @@
-use hypernsga::network_builder::NetworkBuilder;
-use super::Vertex;
-use hypernsga::domain_graph::Neuron;
-use hypernsga::substrate::{Position3d, Node};
+use ::network_builder::NetworkBuilder;
+use ::domain_graph::Neuron;
+use ::substrate::{Position3d, Node};
 
-pub struct VizNetworkBuilder {
-    pub point_list: Vec<Vertex>,
+// For vizualizing a network (e.g. converting into a 3d mesh)
+pub struct VizNetworkBuilder<T> {
+    pub point_list: Vec<T>,
     pub link_index_list: Vec<u32>,
 }
 
-impl NetworkBuilder for VizNetworkBuilder {
+pub trait FromRef<T> {
+    fn from_ref(t: &T) -> Self;
+}
+
+impl<'a, V> NetworkBuilder for VizNetworkBuilder<V>
+where V: FromRef<Node<Position3d, Neuron>> {
+
     type POS = Position3d;
     type NT = Neuron;
     type Output = ();
@@ -22,7 +28,7 @@ impl NetworkBuilder for VizNetworkBuilder {
 
     fn add_node(&mut self, node: &Node<Self::POS, Self::NT>, _param: f64) {
         assert!(node.index == self.point_list.len());
-        self.point_list.push(Vertex::from(node));
+        self.point_list.push(FromRef::from_ref(node));
     }
 
     fn add_link(&mut self,

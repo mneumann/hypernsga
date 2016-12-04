@@ -43,7 +43,7 @@ pub struct Node<P, T>
     pub node_set: NodeSet,
 }
 
-impl<P, T>  Node<P, T> where P: Position
+impl<P, T> Node<P, T> where P: Position
 {
     fn in_nodeset(&self, node_set: &NodeSet) -> bool {
         self.node_set.has_intersection(node_set)

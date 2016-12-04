@@ -32,13 +32,13 @@ pub use transformation::Transformation;
 pub use ui_state::{State, Action, ViewMode};
 use hypernsga::network_builder::gml::GMLNetworkBuilder;
 use hypernsga::network_builder::dot::DotNetworkBuilder;
+use hypernsga::network_builder::viz::VizNetworkBuilder;
 
 // ui
 use conrod::backend::piston::{self, window, Window, WindowEvents, OpenGL};
 use conrod::backend::piston::event::UpdateEvent;
 use conrod_ui::{Ids, gui};
 
-mod viz_network_builder;
 mod vertex;
 mod shaders;
 mod substrate_configuration;
