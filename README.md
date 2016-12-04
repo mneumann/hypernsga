@@ -8,14 +8,18 @@ Evolutionary Hyper-cube based neural net optimization using NSGA2 (Non Dominated
 
 ![HyperNSGA screenshot](/doc/screenshot.png?raw=true "hypernsga")
 
+Uses [imgui] branch.
+
 ## Installation
 
 Requires Rust >= 1.9.0
 
-
 ## Running
 
 ```
+git checkout imgui
 cd hyperneat-gui
 cargo run --release -- ../nets/skorpion.gml
 ```
+
+[imgui]: https://github.com/mneumann/hypernsga/tree/imgui

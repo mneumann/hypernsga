@@ -1,5 +1,8 @@
 - [x] Start with a fully connected, but minimal, topology.
 - [x] Start with x-axis seed nodes.
+- [ ] Use Hjson (human readable JSON) for graph models and configuration.
+- [ ] Instead of writing a GUI with imgui or conrod, expose a webservice!
+- [ ] Write a simple Javascript UI!
 - [ ] Choose a higher mutation rate for individuals which have a worse fitness than
       the avergage.
 - [ ] Adapt the mutation rate according to the average behavioral distance
