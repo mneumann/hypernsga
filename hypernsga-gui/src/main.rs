@@ -21,7 +21,6 @@ use hypernsga::weight::{WeightPerturbanceMethod, WeightRange};
 use hypernsga::substrate::{Node, SubstrateConfiguration, Position, Position3d};
 use nsga2::selection::SelectNSGPMod;
 use nsga2::population::{UnratedPopulation};
-use std::f64::INFINITY;
 use std::env;
 
 use self::support::Support;
@@ -310,8 +309,7 @@ fn main() {
                                                              &expression,
                                                              &substrate_config,
                                                              &domain_fitness_eval)
-                                                 },
-                                                 INFINITY);
+                                                 });
 
         PopulationFitness.apply(0, &mut rated);
 
@@ -553,8 +551,7 @@ node [fontname = Helvetica];
                                                                              &expression,
                                                                              &substrate_config,
                                                                              &domain_fitness_eval)
-                                                                 },
-                                                                 INFINITY);
+                                                                 });
 
                         PopulationFitness.apply(0, &mut rated);
 
@@ -647,8 +644,7 @@ node [fontname = Helvetica];
                                                                           &expression,
                                                                           &substrate_config,
                                                                           &domain_fitness_eval)
-                                                              },
-                                                              INFINITY);
+                                                              });
 
                 PopulationFitness.apply(state.iteration, &mut next_gen);
                 parents =
@@ -706,8 +702,7 @@ node [fontname = Helvetica];
                                                          &expression,
                                                          &substrate_config,
                                                          &domain_fitness_eval)
-                                             },
-                                             INFINITY)
+                                             })
             } else {
                 // no global mutation.
                 let rated_offspring = offspring.rate_in_parallel(&|ind| {
@@ -715,8 +710,7 @@ node [fontname = Helvetica];
                                                                              &expression,
                                                                              &substrate_config,
                                                                              &domain_fitness_eval)
-                                                                 },
-                                                                 INFINITY);
+                                                                 });
                 parents.merge(rated_offspring)
             };
             PopulationFitness.apply(state.iteration, &mut next_gen);
