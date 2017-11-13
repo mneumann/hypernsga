@@ -47,7 +47,7 @@ mod substrate_configuration;
 //mod render_graph;
 //mod render_cppn;
 //mod render_view;
-mod conrod_ui;
+//mod conrod_ui;
 mod transformation;
 mod ui_state;
 
