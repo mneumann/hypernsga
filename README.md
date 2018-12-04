@@ -18,7 +18,7 @@ Requires Rust >= 1.9.0
 
 ```
 git checkout imgui
-cd hyperneat-gui
+cd hypernsga-gui
 cargo run --release -- ../nets/skorpion.gml
 ```
 
