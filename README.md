@@ -16,6 +16,6 @@ Requires Rust >= 1.9.0
 ## Running
 
 ```
-cd hyperneat-gui
+cd hypernsga-gui
 cargo run --release -- ../nets/skorpion.gml
 ```
