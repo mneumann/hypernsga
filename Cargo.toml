@@ -17,10 +17,13 @@ log = "0.3"
 cppn = "0.1"
 acyclic-network = "0.1"
 graph-neighbor-matching = "0.7"
-nsga2 = {git = "https://github.com/mneumann/nsga2-rs"}
 hamming = "0.1"
 primal-bit = "0.2"
 closed01 = "0.4"
 asexp = "0.3"
 graph-io-gml = "0.2"
 petgraph = "0.4"
+
+[dependencies.nsga2]
+git = "https://github.com/mneumann/nsga2-rs"
+rev = "4937cff36138df11ddc68f82ac21e8025e236051"
