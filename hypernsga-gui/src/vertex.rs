@@ -1,6 +1,6 @@
-use std::convert::From;
-use hypernsga::substrate::{Node, Position3d};
 use hypernsga::domain_graph::Neuron;
+use hypernsga::substrate::{Node, Position3d};
+use std::convert::From;
 
 #[derive(Copy, Clone)]
 pub struct Vertex {
@@ -18,9 +18,11 @@ impl<'a> From<&'a Node<Position3d, Neuron>> for Vertex {
             Neuron::Output => [1.0, 0.0, 0.0, 1.0],
         };
         Vertex {
-            position: [node.position.x() as f32,
-                       node.position.y() as f32,
-                       node.position.z() as f32],
+            position: [
+                node.position.x() as f32,
+                node.position.y() as f32,
+                node.position.z() as f32,
+            ],
             color: color,
         }
     }

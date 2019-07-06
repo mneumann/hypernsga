@@ -1,15 +1,15 @@
 // Domain: Target graph approximation
 
 use closed01::Closed01;
-use graph_neighbor_matching::graph::{GraphBuilder, OwnedGraph};
-use std::marker::PhantomData;
-use substrate::{Position, Node};
-use network_builder::NetworkBuilder;
 use fitness::DomainFitness;
-use graph_neighbor_matching::{SimilarityMatrix, ScoreNorm, WeightedNodeColors};
 use graph::NodeLabel;
+use graph_neighbor_matching::graph::{GraphBuilder, OwnedGraph};
 use graph_neighbor_matching::NodeColorWeight;
+use graph_neighbor_matching::{ScoreNorm, SimilarityMatrix, WeightedNodeColors};
+use network_builder::NetworkBuilder;
+use std::marker::PhantomData;
 use std::str::FromStr;
+use substrate::{Node, Position};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Neuron {
@@ -90,8 +90,10 @@ impl NodeCount {
     }
 }
 
-
-pub struct NeuronNetworkBuilder<P> where P: Position {
+pub struct NeuronNetworkBuilder<P>
+where
+    P: Position,
+{
     builder: GraphBuilder<usize, Neuron>,
     _phantom: PhantomData<P>,
 }
@@ -109,18 +111,23 @@ impl<P: Position> NetworkBuilder for NeuronNetworkBuilder<P> {
     }
 
     fn add_node(&mut self, node: &Node<Self::POS, Self::NT>, _param: f64) {
-        let _ = self.builder.add_node(node.index, node.node_info.clone()); 
+        let _ = self.builder.add_node(node.index, node.node_info.clone());
     }
 
-    fn add_link(&mut self,
-                source_node: &Node<Self::POS, Self::NT>,
-                target_node: &Node<Self::POS, Self::NT>,
-                weight1: f64,
-                _weight2: f64) {
+    fn add_link(
+        &mut self,
+        source_node: &Node<Self::POS, Self::NT>,
+        target_node: &Node<Self::POS, Self::NT>,
+        weight1: f64,
+        _weight2: f64,
+    ) {
         let w = weight1.abs();
         debug_assert!(w <= 1.0);
-        let _ = self.builder.add_edge(source_node.index, target_node.index, Closed01::new(w as f32)); 
-
+        let _ = self.builder.add_edge(
+            source_node.index,
+            target_node.index,
+            Closed01::new(w as f32),
+        );
     }
     fn network(self) -> Self::Output {
         self.builder.graph()
@@ -147,9 +154,13 @@ impl DomainFitness<OwnedGraph<Neuron>> for GraphSimilarity {
         let mut s = SimilarityMatrix::new(&graph, &self.target_graph, WeightedNodeColors);
         s.iterate(self.iters, self.eps);
         let assignment = s.optimal_node_assignment();
-        let score = s.score_optimal_sum_norm(Some(&assignment), ScoreNorm::MaxDegree).get() as f64;
+        let score = s
+            .score_optimal_sum_norm(Some(&assignment), ScoreNorm::MaxDegree)
+            .get() as f64;
         if self.edge_score {
-            score * s.score_outgoing_edge_weights_sum_norm(&assignment, ScoreNorm::MaxDegree).get() as f64
+            score
+                * s.score_outgoing_edge_weights_sum_norm(&assignment, ScoreNorm::MaxDegree)
+                    .get() as f64
         } else {
             score
         }

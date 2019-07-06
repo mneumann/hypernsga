@@ -1,7 +1,7 @@
-use hypernsga::network_builder::NetworkBuilder;
 use super::Vertex;
 use hypernsga::domain_graph::Neuron;
-use hypernsga::substrate::{Position3d, Node};
+use hypernsga::network_builder::NetworkBuilder;
+use hypernsga::substrate::{Node, Position3d};
 
 pub struct VizNetworkBuilder {
     pub point_list: Vec<Vertex>,
@@ -25,11 +25,13 @@ impl NetworkBuilder for VizNetworkBuilder {
         self.point_list.push(Vertex::from(node));
     }
 
-    fn add_link(&mut self,
-                source_node: &Node<Self::POS, Self::NT>,
-                target_node: &Node<Self::POS, Self::NT>,
-                weight1: f64,
-                _weight2: f64) {
+    fn add_link(
+        &mut self,
+        source_node: &Node<Self::POS, Self::NT>,
+        target_node: &Node<Self::POS, Self::NT>,
+        weight1: f64,
+        _weight2: f64,
+    ) {
         let w = weight1.abs();
         debug_assert!(w <= 1.0);
 

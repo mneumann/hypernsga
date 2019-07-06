@@ -4,45 +4,47 @@ extern crate rand;
 
 #[macro_use]
 extern crate glium;
+extern crate graph_layout;
 extern crate imgui;
 extern crate time;
-extern crate graph_layout;
 
+use hypernsga::cppn::{
+    ActivationFunction, CppnNodeKind, Expression, GeometricActivationFunction, PopulationFitness,
+    RandomGenomeCreator, Reproduction, G,
+};
+use hypernsga::domain_graph::{GraphSimilarity, Neuron, NeuronNetworkBuilder};
+use hypernsga::fitness::{DomainFitness, Fitness};
 use hypernsga::graph;
-use hypernsga::domain_graph::{Neuron, NeuronNetworkBuilder, GraphSimilarity};
-use hypernsga::network_builder::NetworkBuilder;
-use hypernsga::cppn::{CppnNodeKind, ActivationFunction, GeometricActivationFunction,
-                      RandomGenomeCreator, Reproduction, Expression, G, PopulationFitness};
-use hypernsga::fitness::{Fitness, DomainFitness};
 use hypernsga::mating::MatingMethodWeights;
+use hypernsga::network_builder::NetworkBuilder;
 use hypernsga::prob::Prob;
+use hypernsga::substrate::{Node, Position, Position3d, SubstrateConfiguration};
 use hypernsga::weight::{WeightPerturbanceMethod, WeightRange};
-use hypernsga::substrate::{Node, SubstrateConfiguration, Position, Position3d};
+use nsga2::population::UnratedPopulation;
 use nsga2::selection::SelectNSGPMod;
-use nsga2::population::{UnratedPopulation};
 use std::env;
 
 use self::support::Support;
 use glium::Surface;
-use std::io::Write;
-use std::fs::File;
-pub use vertex::Vertex;
-pub use render_graph::{render_graph, Transformation};
-pub use render_cppn::render_cppn;
-pub use render_view::render_view;
 use imgui_ui::gui;
-pub use ui_state::{State, Action, ViewMode};
+pub use render_cppn::render_cppn;
+pub use render_graph::{render_graph, Transformation};
+pub use render_view::render_view;
+use std::fs::File;
+use std::io::Write;
+pub use ui_state::{Action, State, ViewMode};
+pub use vertex::Vertex;
 
-mod support;
-mod viz_network_builder;
-mod vertex;
+mod imgui_ui;
+mod render_cppn;
+mod render_graph;
+mod render_view;
 mod shaders;
 mod substrate_configuration;
-mod render_graph;
-mod render_cppn;
-mod render_view;
-mod imgui_ui;
+mod support;
 mod ui_state;
+mod vertex;
+mod viz_network_builder;
 
 const CLEAR_COLOR: (f32, f32, f32, f32) = (1.0, 1.0, 1.0, 1.0);
 
@@ -79,27 +81,28 @@ impl<'a, W: Write> NetworkBuilder for GMLNetworkBuilder<'a, W> {
         writeln!(wr, "  node [id {} weight {:.1}]", node.index, 0.0).unwrap();
     }
 
-    fn add_link(&mut self,
-                source_node: &Node<Self::POS, Self::NT>,
-                target_node: &Node<Self::POS, Self::NT>,
-                weight1: f64,
-                _weight2: f64) {
+    fn add_link(
+        &mut self,
+        source_node: &Node<Self::POS, Self::NT>,
+        target_node: &Node<Self::POS, Self::NT>,
+        weight1: f64,
+        _weight2: f64,
+    ) {
         let wr = self.wr.as_mut().unwrap();
         let w = weight1.abs();
         debug_assert!(w <= 1.0);
-        writeln!(wr,
-                 "  edge [source {} target {} weight {:.1}]",
-                 source_node.index,
-                 target_node.index,
-                 w)
-            .unwrap();
+        writeln!(
+            wr,
+            "  edge [source {} target {} weight {:.1}]",
+            source_node.index, target_node.index, w
+        )
+        .unwrap();
     }
 
     fn network(self) -> Self::Output {
         ()
     }
 }
-
 
 pub struct DotNetworkBuilder<'a, W: Write + 'a> {
     wr: Option<&'a mut W>,
@@ -137,31 +140,31 @@ impl<'a, W: Write> NetworkBuilder for DotNetworkBuilder<'a, W> {
             Neuron::Hidden => "",
             Neuron::Output => ",rank=max",
         };
-        writeln!(wr,
-                 "  {}[label={},weight={:.1}{}];",
-                 node.index,
-                 node.index,
-                 param,
-                 rank)
-            .unwrap();
+        writeln!(
+            wr,
+            "  {}[label={},weight={:.1}{}];",
+            node.index, node.index, param, rank
+        )
+        .unwrap();
     }
 
-    fn add_link(&mut self,
-                source_node: &Node<Self::POS, Self::NT>,
-                target_node: &Node<Self::POS, Self::NT>,
-                weight1: f64,
-                _weight2: f64) {
+    fn add_link(
+        &mut self,
+        source_node: &Node<Self::POS, Self::NT>,
+        target_node: &Node<Self::POS, Self::NT>,
+        weight1: f64,
+        _weight2: f64,
+    ) {
         let wr = self.wr.as_mut().unwrap();
         let color = if weight1 >= 0.0 { "black" } else { "red" };
         let w = weight1.abs();
         // debug_assert!(w <= 1.0);
-        writeln!(wr,
-                 "  {} -> {} [weight={:.2},color={}];",
-                 source_node.index,
-                 target_node.index,
-                 w,
-                 color)
-            .unwrap();
+        writeln!(
+            wr,
+            "  {} -> {} [weight={:.2},color={}];",
+            source_node.index, target_node.index, w, color
+        )
+        .unwrap();
     }
 
     fn network(self) -> Self::Output {
@@ -176,14 +179,15 @@ struct EvoConfig {
     objectives: Vec<usize>,
 }
 
-fn fitness<P>(genome: &G,
-              expression: &Expression,
-              substrate_config: &SubstrateConfiguration<P, Neuron>,
-              fitness_eval: &GraphSimilarity)
-              -> Fitness
-    where P: Position
+fn fitness<P>(
+    genome: &G,
+    expression: &Expression,
+    substrate_config: &SubstrateConfiguration<P, Neuron>,
+    fitness_eval: &GraphSimilarity,
+) -> Fitness
+where
+    P: Position,
 {
-
     let mut network_builder = NeuronNetworkBuilder::new();
     let (behavior, connection_cost, sat) =
         expression.express(genome, &mut network_builder, substrate_config);
@@ -209,7 +213,7 @@ fn transformation_from_state(state: &State) -> Transformation {
         rotate_z: state.rotate_substrate_z,
         scale_x: state.scale_substrate_x,
         scale_y: state.scale_substrate_y,
-        scale_z: state.scale_substrate_z
+        scale_z: state.scale_substrate_z,
     }
 }
 
@@ -240,7 +244,9 @@ fn main() {
         objectives: vec![0, 1, 2, 3, 4, 5],
     };
 
-    let mut selection = SelectNSGPMod { objective_eps: 0.01 };
+    let mut selection = SelectNSGPMod {
+        objective_eps: 0.01,
+    };
 
     let weight_perturbance_sigma = 0.1;
     let link_weight_range = 1.0;
@@ -258,14 +264,14 @@ fn main() {
             crossover_weights: 0,
         },
         activation_functions: vec![
-                GeometricActivationFunction::Linear,
-                GeometricActivationFunction::LinearClipped,
-                //GeometricActivationFunction::Gaussian,
-                GeometricActivationFunction::BipolarGaussian,
-                GeometricActivationFunction::BipolarSigmoid,
-                GeometricActivationFunction::Sine,
-                GeometricActivationFunction::Absolute,
-            ],
+            GeometricActivationFunction::Linear,
+            GeometricActivationFunction::LinearClipped,
+            //GeometricActivationFunction::Gaussian,
+            GeometricActivationFunction::BipolarGaussian,
+            GeometricActivationFunction::BipolarSigmoid,
+            GeometricActivationFunction::Sine,
+            GeometricActivationFunction::Absolute,
+        ],
         mutate_element_prob: Prob::new(0.05),
         weight_perturbance: WeightPerturbanceMethod::JiggleGaussian {
             sigma: weight_perturbance_sigma,
@@ -283,19 +289,20 @@ fn main() {
         link_weight_range: WeightRange::bipolar(link_weight_range),
 
         start_activation_functions: vec![
-                //GeometricActivationFunction::Linear,
-                GeometricActivationFunction::BipolarGaussian,
-                GeometricActivationFunction::BipolarSigmoid,
-                GeometricActivationFunction::Sine,
-            ],
+            //GeometricActivationFunction::Linear,
+            GeometricActivationFunction::BipolarGaussian,
+            GeometricActivationFunction::BipolarSigmoid,
+            GeometricActivationFunction::Sine,
+        ],
         start_connected: false,
         start_link_weight_range: WeightRange::bipolar(0.1),
         start_symmetry: vec![], // Some(3.0), None, Some(3.0)],
         start_initial_nodes: 0,
     };
 
-    let mut expression = Expression { link_expression_range: (0.1, 0.5) };
-
+    let mut expression = Expression {
+        link_expression_range: (0.1, 0.5),
+    };
 
     // create `generation 0`
     let mut parents = {
@@ -304,20 +311,18 @@ fn main() {
             initial.push(random_genome_creator.create::<_, Position3d>(0, &mut rng));
         }
         let mut rated = initial.rate_in_parallel(&|ind| {
-                                                     fitness(ind,
-                                                             &expression,
-                                                             &substrate_config,
-                                                             &domain_fitness_eval)
-                                                 });
+            fitness(ind, &expression, &substrate_config, &domain_fitness_eval)
+        });
 
         PopulationFitness.apply(0, &mut rated);
 
         rated.select(evo_config.mu, &evo_config.objectives, &selection, &mut rng)
     };
 
-
     let mut best_individual_i = 0;
-    let mut best_fitness = parents.individuals()[best_individual_i].fitness().domain_fitness;
+    let mut best_fitness = parents.individuals()[best_individual_i]
+        .fitness()
+        .domain_fitness;
     for (i, ind) in parents.individuals().iter().enumerate() {
         let fitness = ind.fitness().domain_fitness;
         if fitness > best_fitness {
@@ -347,8 +352,8 @@ fn main() {
 
         mutate_symmetric_join: reproduction.mating_method_weights.mutate_symmetric_join as i32,
         mutate_symmetric_fork: reproduction.mating_method_weights.mutate_symmetric_fork as i32,
-        mutate_symmetric_connect: reproduction.mating_method_weights
-            .mutate_symmetric_connect as i32,
+        mutate_symmetric_connect: reproduction.mating_method_weights.mutate_symmetric_connect
+            as i32,
 
         mutate_weights: reproduction.mating_method_weights.mutate_weights as i32,
 
@@ -391,26 +396,40 @@ fn main() {
         auto_reset_counter: 0,
     };
 
-    let program_substrate: glium::Program =
-        glium::Program::from_source(&support.display,
-                                    shaders::VERTEX_SHADER_SUBSTRATE,
-                                    shaders::FRAGMENT_SHADER_SUBSTRATE,
-                                    None)
-            .unwrap();
-    let program_vertex: glium::Program =
-        glium::Program::from_source(&support.display,
-                                    shaders::VERTEX_SHADER_VERTEX,
-                                    shaders::FRAGMENT_SHADER_VERTEX,
-                                    None)
-            .unwrap();
+    let program_substrate: glium::Program = glium::Program::from_source(
+        &support.display,
+        shaders::VERTEX_SHADER_SUBSTRATE,
+        shaders::FRAGMENT_SHADER_SUBSTRATE,
+        None,
+    )
+    .unwrap();
+    let program_vertex: glium::Program = glium::Program::from_source(
+        &support.display,
+        shaders::VERTEX_SHADER_VERTEX,
+        shaders::FRAGMENT_SHADER_VERTEX,
+        None,
+    )
+    .unwrap();
 
     loop {
         {
             support.render(CLEAR_COLOR, |ui, display, target| {
                 let (width, height) = target.get_dimensions();
-                render_view(state.view, &parents, best_individual_i,
-                            display, target, &expression, &program_substrate, &program_vertex, &substrate_config,
-                            &transformation_from_state(&state), 4, width, height);
+                render_view(
+                    state.view,
+                    &parents,
+                    best_individual_i,
+                    display,
+                    target,
+                    &expression,
+                    &program_substrate,
+                    &program_vertex,
+                    &substrate_config,
+                    &transformation_from_state(&state),
+                    4,
+                    width,
+                    height,
+                );
                 gui(ui, &mut state, &parents);
             });
 
@@ -434,9 +453,11 @@ fn main() {
 
                     let best = &parents.individuals()[best_individual_i];
 
-                    let basefilename = format!("best.{}.{}",
-                                               state.iteration,
-                                               (best.fitness().domain_fitness * 1000.0) as usize);
+                    let basefilename = format!(
+                        "best.{}.{}",
+                        state.iteration,
+                        (best.fitness().domain_fitness * 1000.0) as usize
+                    );
 
                     println!("filename: {}", basefilename);
 
@@ -446,9 +467,11 @@ fn main() {
                         let mut network_builder = GMLNetworkBuilder::new();
                         network_builder.set_writer(&mut file);
                         network_builder.begin();
-                        let (_behavior, _connection_cost, _) = expression.express(best.genome(),
+                        let (_behavior, _connection_cost, _) = expression.express(
+                            best.genome(),
                             &mut network_builder,
-                            &substrate_config);
+                            &substrate_config,
+                        );
                         network_builder.end();
                     }
                     // Write DOT
@@ -457,9 +480,11 @@ fn main() {
                         let mut network_builder = DotNetworkBuilder::new();
                         network_builder.set_writer(&mut file);
                         network_builder.begin();
-                        let (_behavior, _connection_cost, _) = expression.express(best.genome(),
+                        let (_behavior, _connection_cost, _) = expression.express(
+                            best.genome(),
                             &mut network_builder,
-                            &substrate_config);
+                            &substrate_config,
+                        );
                         network_builder.end();
                     }
                     // Write CPPN
@@ -467,8 +492,9 @@ fn main() {
                         let mut file = File::create(&format!("{}.cppn.dot", basefilename)).unwrap();
                         let network = best.genome().network();
 
-                        writeln!(&mut file,
-                                 "digraph {{
+                        writeln!(
+                            &mut file,
+                            "digraph {{
 graph [
   layout=neato,
   rankdir = \"TB\",
@@ -481,8 +507,9 @@ graph [
   splines = \"polyline\",
 ];
 node [fontname = Helvetica];
-")
-                            .unwrap();
+"
+                        )
+                        .unwrap();
 
                         network.each_node_with_index(|node, node_idx| {
                             let s = match node.node_type().kind {
@@ -498,8 +525,10 @@ node [fontname = Helvetica];
                                     };
 
                                     // XXX label
-                                    format!("shape=egg,label={},rank=min,style=filled,color=grey",
-                                            label)
+                                    format!(
+                                        "shape=egg,label={},rank=min,style=filled,color=grey",
+                                        label
+                                    )
                                 }
                                 CppnNodeKind::Bias => {
                                     assert!(node_idx.index() == 6);
@@ -510,59 +539,63 @@ node [fontname = Helvetica];
                                         7 => "t",
                                         8 => "ex",
                                         9 => "w",
-                                        10 => "r", 
+                                        10 => "r",
                                         _ => panic!(),
                                     };
-                                    format!("shape=doublecircle,label={},rank=max,style=filled,\
-                                             fillcolor=yellow,color=grey",
-                                            label)
+                                    format!(
+                                        "shape=doublecircle,label={},rank=max,style=filled,\
+                                         fillcolor=yellow,color=grey",
+                                        label
+                                    )
                                 }
-                                CppnNodeKind::Hidden => {
-                                    format!("shape=box,label={}",
-                                            node.node_type().activation_function.name())
-                                }
+                                CppnNodeKind::Hidden => format!(
+                                    "shape=box,label={}",
+                                    node.node_type().activation_function.name()
+                                ),
                             };
                             writeln!(&mut file, "{} [{}];", node_idx.index(), s).unwrap();
                         });
                         network.each_link_ref(|link_ref| {
                             let w = link_ref.link().weight().0;
                             let color = if w >= 0.0 { "black" } else { "red" };
-                            writeln!(&mut file,
-                                     "{} -> {} [color={}];",
-                                     link_ref.link().source_node_index().index(),
-                                     link_ref.link().target_node_index().index(),
-                                     color)
-                                .unwrap();
+                            writeln!(
+                                &mut file,
+                                "{} -> {} [color={}];",
+                                link_ref.link().source_node_index().index(),
+                                link_ref.link().target_node_index().index(),
+                                color
+                            )
+                            .unwrap();
                         });
 
                         writeln!(&mut file, "}}").unwrap();
                     }
-
                 }
                 Action::ResetNet => {
                     parents = {
                         let mut initial = UnratedPopulation::new();
                         for _ in 0..state.mu {
-                            initial.push(random_genome_creator.create::<_, Position3d>(0, &mut rng));
+                            initial
+                                .push(random_genome_creator.create::<_, Position3d>(0, &mut rng));
                         }
                         let mut rated = initial.rate_in_parallel(&|ind| {
-                                                                     fitness(ind,
-                                                                             &expression,
-                                                                             &substrate_config,
-                                                                             &domain_fitness_eval)
-                                                                 });
+                            fitness(ind, &expression, &substrate_config, &domain_fitness_eval)
+                        });
 
                         PopulationFitness.apply(0, &mut rated);
 
-                        rated.select(state.mu as usize,
-                                     &evo_config.objectives,
-                                     &selection,
-                                     &mut rng)
+                        rated.select(
+                            state.mu as usize,
+                            &evo_config.objectives,
+                            &selection,
+                            &mut rng,
+                        )
                     };
 
                     best_individual_i = 0;
-                    best_fitness =
-                        parents.individuals()[best_individual_i].fitness().domain_fitness;
+                    best_fitness = parents.individuals()[best_individual_i]
+                        .fitness()
+                        .domain_fitness;
                     for (i, ind) in parents.individuals().iter().enumerate() {
                         let fitness = ind.fitness().domain_fitness;
                         if fitness > best_fitness {
@@ -572,7 +605,9 @@ node [fontname = Helvetica];
                     }
                     state.best_fitness = best_fitness;
                     state.best_fitness_history.clear();
-                    state.best_fitness_history.push((state.iteration, state.best_fitness));
+                    state
+                        .best_fitness_history
+                        .push((state.iteration, state.best_fitness));
                     state.iteration = 0;
                 }
                 _ => {}
@@ -600,7 +635,6 @@ node [fontname = Helvetica];
             domain_fitness_eval.iters = state.nm_iters as usize;
             domain_fitness_eval.eps = state.nm_eps;
 
-
             reproduction.mutate_element_prob = Prob::new(state.mutate_element_prob);
             selection.objective_eps = state.nsgp_objective_eps as f64;
             reproduction.weight_perturbance = WeightPerturbanceMethod::JiggleGaussian {
@@ -609,8 +643,10 @@ node [fontname = Helvetica];
             reproduction.link_weight_range = WeightRange::bipolar(state.link_weight_range as f64);
             reproduction.link_weight_creation_sigma = state.link_weight_creation_sigma as f64;
 
-            expression.link_expression_range = (state.link_expression_min as f64,
-                                                state.link_expression_max as f64);
+            expression.link_expression_range = (
+                state.link_expression_min as f64,
+                state.link_expression_max as f64,
+            );
 
             let mut new_objectives = Vec::new();
             new_objectives.push(0);
@@ -639,18 +675,17 @@ node [fontname = Helvetica];
                 state.recalc_fitness = false;
                 let offspring = parents.into_unrated();
                 let mut next_gen = offspring.rate_in_parallel(&|ind| {
-                                                                  fitness(ind,
-                                                                          &expression,
-                                                                          &substrate_config,
-                                                                          &domain_fitness_eval)
-                                                              });
+                    fitness(ind, &expression, &substrate_config, &domain_fitness_eval)
+                });
 
                 PopulationFitness.apply(state.iteration, &mut next_gen);
                 parents =
                     next_gen.select(evo_config.mu, &evo_config.objectives, &selection, &mut rng);
 
                 best_individual_i = 0;
-                best_fitness = parents.individuals()[best_individual_i].fitness().domain_fitness;
+                best_fitness = parents.individuals()[best_individual_i]
+                    .fitness()
+                    .domain_fitness;
                 for (i, ind) in parents.individuals().iter().enumerate() {
                     let fitness = ind.fitness().domain_fitness;
                     if fitness > best_fitness {
@@ -660,7 +695,9 @@ node [fontname = Helvetica];
                 }
 
                 state.best_fitness = best_fitness;
-                state.best_fitness_history.push((state.iteration, state.best_fitness));
+                state
+                    .best_fitness_history
+                    .push((state.iteration, state.best_fitness));
             }
         }
 
@@ -674,10 +711,9 @@ node [fontname = Helvetica];
             // create next generation
             state.iteration += 1;
             let offspring =
-                parents.reproduce(&mut rng,
-                                  evo_config.lambda,
-                                  evo_config.k,
-                                  &|rng, p1, p2| reproduction.mate(rng, p1, p2, state.iteration));
+                parents.reproduce(&mut rng, evo_config.lambda, evo_config.k, &|rng, p1, p2| {
+                    reproduction.mate(rng, p1, p2, state.iteration)
+                });
             let mut next_gen = if state.global_mutation_rate > 0.0 {
                 // mutate all individuals of the whole population.
                 // XXX: Optimize
@@ -689,35 +725,32 @@ node [fontname = Helvetica];
                     let mut genome = ind.into_genome();
                     if prob.flip(&mut rng) {
                         // mutate that genome
-                        genome.mutate_weights(Prob::new(state.global_element_mutation),
-                                              &reproduction.weight_perturbance,
-                                              &reproduction.link_weight_range,
-                                              &mut rng);
+                        genome.mutate_weights(
+                            Prob::new(state.global_element_mutation),
+                            &reproduction.weight_perturbance,
+                            &reproduction.link_weight_range,
+                            &mut rng,
+                        );
                     }
                     new_unrated.push(genome);
                 }
                 new_unrated.rate_in_parallel(&|ind| {
-                                                 fitness(ind,
-                                                         &expression,
-                                                         &substrate_config,
-                                                         &domain_fitness_eval)
-                                             })
+                    fitness(ind, &expression, &substrate_config, &domain_fitness_eval)
+                })
             } else {
                 // no global mutation.
                 let rated_offspring = offspring.rate_in_parallel(&|ind| {
-                                                                     fitness(ind,
-                                                                             &expression,
-                                                                             &substrate_config,
-                                                                             &domain_fitness_eval)
-                                                                 });
+                    fitness(ind, &expression, &substrate_config, &domain_fitness_eval)
+                });
                 parents.merge(rated_offspring)
             };
             PopulationFitness.apply(state.iteration, &mut next_gen);
             parents = next_gen.select(evo_config.mu, &evo_config.objectives, &selection, &mut rng);
 
-
             best_individual_i = 0;
-            best_fitness = parents.individuals()[best_individual_i].fitness().domain_fitness;
+            best_fitness = parents.individuals()[best_individual_i]
+                .fitness()
+                .domain_fitness;
             for (i, ind) in parents.individuals().iter().enumerate() {
                 let fitness = ind.fitness().domain_fitness;
                 if fitness > best_fitness {
@@ -727,7 +760,9 @@ node [fontname = Helvetica];
             }
 
             state.best_fitness = best_fitness;
-            state.best_fitness_history.push((state.iteration, state.best_fitness));
+            state
+                .best_fitness_history
+                .push((state.iteration, state.best_fitness));
 
             let time_after = time::precise_time_ns();
             assert!(time_after > time_before);

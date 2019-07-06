@@ -1,5 +1,5 @@
-use primal_bit::BitVec;
 use hamming;
+use primal_bit::BitVec;
 
 #[derive(Clone, Debug)]
 pub struct BehavioralBitvec {

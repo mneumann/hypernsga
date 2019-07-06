@@ -1,29 +1,30 @@
-use ::glium;
+use super::Vertex;
+use glium;
 use glium::backend::glutin_backend::GlutinFacade;
 use glium::index::PrimitiveType;
 use glium::Surface;
-use hypernsga::cppn::{Cppn, G, GeometricActivationFunction};
+use hypernsga::cppn::{Cppn, GeometricActivationFunction, G};
 use hypernsga::distribute::DistributeInterval;
-use super::Vertex;
 
-pub fn render_cppn(display: &GlutinFacade,
-                   target: &mut glium::Frame,
-                   genome: &G,
-                   program: &glium::Program,
-                   viewport: glium::Rect) {
+pub fn render_cppn(
+    display: &GlutinFacade,
+    target: &mut glium::Frame,
+    genome: &G,
+    program: &glium::Program,
+    viewport: glium::Rect,
+) {
     // Layout the CPPN
     let cppn = Cppn::new(genome.network());
     let layers = cppn.group_layers();
     let mut dy = DistributeInterval::new(layers.len(), -1.0, 1.0);
 
-    let mut cppn_node_positions: Vec<_> = genome.network()
+    let mut cppn_node_positions: Vec<_> = genome
+        .network()
         .nodes()
         .iter()
-        .map(|_node| {
-            Vertex {
-                position: [0.0, 0.0, 0.0],
-                color: [0.0, 1.0, 0.0, 1.0],
-            }
+        .map(|_node| Vertex {
+            position: [0.0, 0.0, 0.0],
+            color: [0.0, 1.0, 0.0, 1.0],
         })
         .collect();
 
@@ -122,7 +123,6 @@ pub fn render_cppn(display: &GlutinFacade,
                     //
                 }
             }
-
         }
     }
 
@@ -185,16 +185,22 @@ pub fn render_cppn(display: &GlutinFacade,
     // target.draw(&vertex_buffer_cppn, &cppn_index_buffer, program, &uniforms_cppn, &draw_parameters2).unwrap();
 
     let lines_buffer = glium::VertexBuffer::new(display, &line_vertices).unwrap();
-    target.draw(&lines_buffer,
-              &glium::index::NoIndices(PrimitiveType::LinesList),
-              program,
-              &uniforms_cppn,
-              &draw_parameters2)
+    target
+        .draw(
+            &lines_buffer,
+            &glium::index::NoIndices(PrimitiveType::LinesList),
+            program,
+            &uniforms_cppn,
+            &draw_parameters2,
+        )
         .unwrap();
-    target.draw(&triangle_buffer,
-              &glium::index::NoIndices(PrimitiveType::TrianglesList),
-              program,
-              &uniforms_cppn,
-              &draw_parameters2)
+    target
+        .draw(
+            &triangle_buffer,
+            &glium::index::NoIndices(PrimitiveType::TrianglesList),
+            program,
+            &uniforms_cppn,
+            &draw_parameters2,
+        )
         .unwrap();
 }

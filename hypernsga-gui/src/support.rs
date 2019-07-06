@@ -1,10 +1,12 @@
 // Adapted from https://github.com/Gekkio/imgui-rs/blob/master/examples/support/mod.rs
-use glium::{DisplayBuild, Surface, Frame};
 use glium::backend::glutin_backend::GlutinFacade;
 use glium::glutin;
-use glium::glutin::{ElementState, Event, MouseButton, MouseScrollDelta, VirtualKeyCode, TouchPhase};
-use imgui::{ImGui, Ui, ImGuiKey};
+use glium::glutin::{
+    ElementState, Event, MouseButton, MouseScrollDelta, TouchPhase, VirtualKeyCode,
+};
+use glium::{DisplayBuild, Frame, Surface};
 use imgui::glium_renderer::Renderer;
+use imgui::{ImGui, ImGuiKey, Ui};
 use time::SteadyTime;
 
 pub struct Support {
@@ -19,9 +21,7 @@ pub struct Support {
 
 impl Support {
     pub fn init() -> Support {
-        let display = glutin::WindowBuilder::new()
-            .build_glium()
-            .unwrap();
+        let display = glutin::WindowBuilder::new().build_glium().unwrap();
 
         let mut imgui = ImGui::init();
         let renderer = Renderer::init(&mut imgui, &display).unwrap();
@@ -59,20 +59,26 @@ impl Support {
 
     pub fn update_mouse(&mut self) {
         let scale = self.imgui.display_framebuffer_scale();
-        self.imgui.set_mouse_pos(self.mouse_pos.0 as f32 / scale.0,
-                                 self.mouse_pos.1 as f32 / scale.1);
-        self.imgui.set_mouse_down(&[self.mouse_pressed.0,
-                                    self.mouse_pressed.1,
-                                    self.mouse_pressed.2,
-                                    false,
-                                    false]);
+        self.imgui.set_mouse_pos(
+            self.mouse_pos.0 as f32 / scale.0,
+            self.mouse_pos.1 as f32 / scale.1,
+        );
+        self.imgui.set_mouse_down(&[
+            self.mouse_pressed.0,
+            self.mouse_pressed.1,
+            self.mouse_pressed.2,
+            false,
+            false,
+        ]);
         self.imgui.set_mouse_wheel(self.mouse_wheel / scale.1);
         self.mouse_wheel = 0.0;
     }
 
-    pub fn render<F: FnMut(&Ui, &GlutinFacade, &mut Frame)>(&mut self,
-                                                            clear_color: (f32, f32, f32, f32),
-                                                            mut run_ui: F) {
+    pub fn render<F: FnMut(&Ui, &GlutinFacade, &mut Frame)>(
+        &mut self,
+        clear_color: (f32, f32, f32, f32),
+        mut run_ui: F,
+    ) {
         let now = SteadyTime::now();
         let delta = now - self.last_frame;
         let delta_f = delta.num_nanoseconds().unwrap() as f32 / 1_000_000_000.0;
@@ -122,14 +128,18 @@ impl Support {
                         Some(VirtualKeyCode::X) => self.imgui.set_key(16, pressed),
                         Some(VirtualKeyCode::Y) => self.imgui.set_key(17, pressed),
                         Some(VirtualKeyCode::Z) => self.imgui.set_key(18, pressed),
-                        Some(VirtualKeyCode::LControl) |
-                        Some(VirtualKeyCode::RControl) => self.imgui.set_key_ctrl(pressed),
-                        Some(VirtualKeyCode::LShift) |
-                        Some(VirtualKeyCode::RShift) => self.imgui.set_key_shift(pressed),
-                        Some(VirtualKeyCode::LAlt) |
-                        Some(VirtualKeyCode::RAlt) => self.imgui.set_key_alt(pressed),
-                        Some(VirtualKeyCode::LWin) |
-                        Some(VirtualKeyCode::RWin) => self.imgui.set_key_super(pressed),
+                        Some(VirtualKeyCode::LControl) | Some(VirtualKeyCode::RControl) => {
+                            self.imgui.set_key_ctrl(pressed)
+                        }
+                        Some(VirtualKeyCode::LShift) | Some(VirtualKeyCode::RShift) => {
+                            self.imgui.set_key_shift(pressed)
+                        }
+                        Some(VirtualKeyCode::LAlt) | Some(VirtualKeyCode::RAlt) => {
+                            self.imgui.set_key_alt(pressed)
+                        }
+                        Some(VirtualKeyCode::LWin) | Some(VirtualKeyCode::RWin) => {
+                            self.imgui.set_key_super(pressed)
+                        }
                         _ => {}
                     }
                 }

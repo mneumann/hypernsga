@@ -1,7 +1,7 @@
-use nsga2::multi_objective::MultiObjective;
-use nsga2::domination::Domination;
-use std::cmp::Ordering;
 use behavioral_bitvec::BehavioralBitvec;
+use nsga2::domination::Domination;
+use nsga2::multi_objective::MultiObjective;
+use std::cmp::Ordering;
 
 #[derive(Clone, Debug)]
 pub struct Behavior {
@@ -13,8 +13,12 @@ pub struct Behavior {
 
 impl Behavior {
     pub fn weighted_distance(&self, other: &Self) -> f64 {
-        let d1 = self.bv_link_weight1.hamming_distance(&other.bv_link_weight1) as f64;
-        let d2 = self.bv_link_expression.hamming_distance(&other.bv_link_expression) as f64;
+        let d1 = self
+            .bv_link_weight1
+            .hamming_distance(&other.bv_link_weight1) as f64;
+        let d2 = self
+            .bv_link_expression
+            .hamming_distance(&other.bv_link_expression) as f64;
         d1 + d2
     }
 }
@@ -34,7 +38,7 @@ pub struct Fitness {
     /// The connection cost of the generated network (smaller value is better!)
     pub connection_cost: f64,
 
-    // each genome records 
+    // each genome records
     pub age_diversity: f64,
 
     pub saturation: f64,
@@ -49,13 +53,28 @@ impl MultiObjective for Fitness {
     fn cmp_objective(&self, other: &Self, objective: usize) -> Ordering {
         match objective {
             // higher domain_fitness is better!
-            0 => self.domain_fitness.partial_cmp(&other.domain_fitness).unwrap().reverse(),
+            0 => self
+                .domain_fitness
+                .partial_cmp(&other.domain_fitness)
+                .unwrap()
+                .reverse(),
             // higher behavioral_diversity is better!
-            1 => self.behavioral_diversity.partial_cmp(&other.behavioral_diversity).unwrap().reverse(),
+            1 => self
+                .behavioral_diversity
+                .partial_cmp(&other.behavioral_diversity)
+                .unwrap()
+                .reverse(),
             // smaller connection_cost is better
-            2 => self.connection_cost.partial_cmp(&other.connection_cost).unwrap(),
+            2 => self
+                .connection_cost
+                .partial_cmp(&other.connection_cost)
+                .unwrap(),
             // higer age_diversity is better
-            3 => self.age_diversity.partial_cmp(&other.age_diversity).unwrap().reverse(),
+            3 => self
+                .age_diversity
+                .partial_cmp(&other.age_diversity)
+                .unwrap()
+                .reverse(),
             // lower saturation is better
             4 => self.saturation.partial_cmp(&other.saturation).unwrap(),
             // lower complexity is better
@@ -68,9 +87,7 @@ impl MultiObjective for Fitness {
     fn dist_objective(&self, other: &Self, objective: usize) -> f64 {
         match objective {
             0 => self.domain_fitness - other.domain_fitness,
-            1 => {
-                self.behavioral_diversity - other.behavioral_diversity
-            }
+            1 => self.behavioral_diversity - other.behavioral_diversity,
             2 => self.connection_cost - other.connection_cost,
             3 => self.age_diversity - other.age_diversity,
             4 => self.saturation - other.saturation,
@@ -104,7 +121,10 @@ impl Domination for Fitness {
         } else if right_dom_cnt > 0 && left_dom_cnt == 0 {
             Ordering::Greater
         } else {
-            debug_assert!((left_dom_cnt > 0 && right_dom_cnt > 0) || (left_dom_cnt == 0 && right_dom_cnt == 0));
+            debug_assert!(
+                (left_dom_cnt > 0 && right_dom_cnt > 0)
+                    || (left_dom_cnt == 0 && right_dom_cnt == 0)
+            );
             Ordering::Equal
         }
     }
@@ -112,6 +132,9 @@ impl Domination for Fitness {
 
 /// Trait used to evaluate the domain specific fitness
 
-pub trait DomainFitness<G>: Sync where G: Sync {
+pub trait DomainFitness<G>: Sync
+where
+    G: Sync,
+{
     fn fitness(&self, g: G) -> f64;
 }

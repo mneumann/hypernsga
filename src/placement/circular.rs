@@ -6,10 +6,7 @@ pub struct Circular2d {
 
 impl Circular2d {
     pub fn new(n: usize) -> Self {
-        Circular2d {
-            n: n,
-            i: 1,
-        }
+        Circular2d { n: n, i: 1 }
     }
 }
 

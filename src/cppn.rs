@@ -1,21 +1,21 @@
+use behavioral_bitvec::BehavioralBitvec;
+pub use cppn_ext::activation_function::ActivationFunction;
+pub use cppn_ext::activation_function::GeometricActivationFunction;
 pub use cppn_ext::cppn::Cppn;
 use cppn_ext::cppn::CppnNode;
 pub use cppn_ext::cppn::CppnNodeKind;
-pub use cppn_ext::activation_function::ActivationFunction;
-pub use cppn_ext::activation_function::GeometricActivationFunction;
-use weight::{Weight, WeightRange, WeightPerturbanceMethod, gaussian};
-use substrate::{Position, SubstrateConfiguration};
-use behavioral_bitvec::BehavioralBitvec;
+use fitness::{Behavior, DomainFitness, Fitness};
 use genome::Genome;
+use mating::{MatingMethod, MatingMethodWeights};
+use network_builder::NetworkBuilder;
 use nsga2::driver::Driver;
 use nsga2::population::RatedPopulation;
 use nsga2::selection::SelectNSGP;
-use fitness::{Behavior, Fitness, DomainFitness};
-use rand::Rng;
-use mating::{MatingMethod, MatingMethodWeights};
 use prob::Prob;
-use network_builder::NetworkBuilder;
+use rand::Rng;
 use std::marker::PhantomData;
+use substrate::{Position, SubstrateConfiguration};
+use weight::{gaussian, Weight, WeightPerturbanceMethod, WeightRange};
 
 pub type CppnGenome<AF> = Genome<CppnNode<AF>>;
 
@@ -40,14 +40,16 @@ impl Saturation {
 ///
 /// Returns the Behavior and Connection Cost of the developed network
 
-fn develop_cppn<P, AF, T, V>(cppn: &mut Cppn<CppnNode<AF>, Weight, ()>,
-                             substrate_config: &SubstrateConfiguration<P, T>,
-                             visitor: &mut V,
-                             link_expression_range: (f64, f64))
-                             -> (Behavior, f64, Saturation)
-    where P: Position,
-          AF: ActivationFunction,
-          V: NetworkBuilder<POS = P, NT = T>
+fn develop_cppn<P, AF, T, V>(
+    cppn: &mut Cppn<CppnNode<AF>, Weight, ()>,
+    substrate_config: &SubstrateConfiguration<P, T>,
+    visitor: &mut V,
+    link_expression_range: (f64, f64),
+) -> (Behavior, f64, Saturation)
+where
+    P: Position,
+    AF: ActivationFunction,
+    V: NetworkBuilder<POS = P, NT = T>,
 {
     // our CPPN has at least two outputs: link weight 1, link expression. optional: link weight 2, node weight
     assert!(cppn.output_count() >= 2);
@@ -128,7 +130,8 @@ fn develop_cppn<P, AF, T, V>(cppn: &mut Cppn<CppnNode<AF>, Weight, ()>,
         behavior.bv_link_expression.push(link_expression);
         behavior.bv_link_weight2.push(link_weight2);
 
-        if link_expression >= link_expression_range.0 && link_expression <= link_expression_range.1 {
+        if link_expression >= link_expression_range.0 && link_expression <= link_expression_range.1
+        {
             let distance_sq = source_node.position.distance_square(&target_node.position);
             debug_assert!(distance_sq >= 0.0);
             connection_cost += distance_sq;
@@ -142,11 +145,12 @@ fn develop_cppn<P, AF, T, V>(cppn: &mut Cppn<CppnNode<AF>, Weight, ()>,
 /// Determines the domain fitness of `G`
 
 pub struct CppnDriver<'a, DOMFIT, G, P, T, NETBUILDER>
-    where DOMFIT: DomainFitness<G> + 'a,
-          P: Position + Sync + 'a,
-          T: Sync + 'a,
-          NETBUILDER: NetworkBuilder<POS = P, NT = T, Output = G> + Sync,
-          G: Sync
+where
+    DOMFIT: DomainFitness<G> + 'a,
+    P: Position + Sync + 'a,
+    T: Sync + 'a,
+    NETBUILDER: NetworkBuilder<POS = P, NT = T, Output = G> + Sync,
+    G: Sync,
 {
     /// express a link if leo is within [min, max]
     pub link_expression_range: (f64, f64),
@@ -162,11 +166,12 @@ pub struct CppnDriver<'a, DOMFIT, G, P, T, NETBUILDER>
 /// XXX: Driver does not correctly set birth_iteration of offspring genomes!!!!
 /// XXX: wrong calculation of age_diversity
 impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T, NETBUILDER>
-    where DOMFIT: DomainFitness<G>,
-          G: Sync,
-          P: Position + Sync + 'a,
-          T: Sync + 'a,
-          NETBUILDER: NetworkBuilder<POS = P, NT = T, Output = G> + Sync
+where
+    DOMFIT: DomainFitness<G>,
+    G: Sync,
+    P: Position + Sync + 'a,
+    T: Sync + 'a,
+    NETBUILDER: NetworkBuilder<POS = P, NT = T, Output = G> + Sync,
 {
     type GENOME = CppnGenome<GeometricActivationFunction>;
     type FIT = Fitness;
@@ -178,7 +183,8 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
     /// If `self.start_connected` is `true`, we add some initial connections.
 
     fn random_genome<R>(&self, rng: &mut R) -> Self::GENOME
-        where R: Rng
+    where
+        R: Rng,
     {
         self.random_genome_creator.create::<_, P>(0, rng)
     }
@@ -187,10 +193,12 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
         let mut cppn = Cppn::new(ind.network());
         let mut net_builder = NETBUILDER::new();
 
-        let (behavior, connection_cost, sat) = develop_cppn(&mut cppn,
-                                                            &self.substrate_configuration,
-                                                            &mut net_builder,
-                                                            self.link_expression_range);
+        let (behavior, connection_cost, sat) = develop_cppn(
+            &mut cppn,
+            &self.substrate_configuration,
+            &mut net_builder,
+            self.link_expression_range,
+        );
 
         // Evaluate domain specific fitness
         let domain_fitness = self.domain_fitness.fitness(net_builder.network());
@@ -207,7 +215,8 @@ impl<'a, DOMFIT, G, P, T, NETBUILDER> Driver for CppnDriver<'a, DOMFIT, G, P, T,
     }
 
     fn mate<R>(&self, rng: &mut R, parent1: &Self::GENOME, parent2: &Self::GENOME) -> Self::GENOME
-        where R: Rng
+    where
+        R: Rng,
     {
         // XXX set birth_iteration
         self.reproduction.mate(rng, parent1, parent2, 0 /* XXX */)
@@ -248,8 +257,9 @@ pub type G = CppnGenome<GeometricActivationFunction>;
 
 impl RandomGenomeCreator {
     pub fn create<R, P>(&self, iteration: usize, rng: &mut R) -> G
-        where R: Rng,
-              P: Position
+    where
+        R: Rng,
+        P: Position,
     {
         let mut genome = G::new(iteration);
 
@@ -272,10 +282,18 @@ impl RandomGenomeCreator {
         inputs.push(bias);
 
         // 4 outputs (t,ex,w,r)
-        let out_t = genome.add_node(CppnNode::output(GeometricActivationFunction::LinearBipolarClipped));
-        let out_ex = genome.add_node(CppnNode::output(GeometricActivationFunction::LinearBipolarClipped));
-        let out_w = genome.add_node(CppnNode::output(GeometricActivationFunction::LinearBipolarClipped));
-        let out_r = genome.add_node(CppnNode::output(GeometricActivationFunction::LinearBipolarClipped));
+        let out_t = genome.add_node(CppnNode::output(
+            GeometricActivationFunction::LinearBipolarClipped,
+        ));
+        let out_ex = genome.add_node(CppnNode::output(
+            GeometricActivationFunction::LinearBipolarClipped,
+        ));
+        let out_w = genome.add_node(CppnNode::output(
+            GeometricActivationFunction::LinearBipolarClipped,
+        ));
+        let out_r = genome.add_node(CppnNode::output(
+            GeometricActivationFunction::LinearBipolarClipped,
+        ));
         outputs.push(out_t);
         outputs.push(out_ex);
         outputs.push(out_w);
@@ -287,8 +305,9 @@ impl RandomGenomeCreator {
 
         for d in 0..P::dims() {
             if let &Some(w) = self.start_symmetry.get(d).unwrap_or(&None) {
-                let sym =
-                    genome.add_node(CppnNode::hidden(GeometricActivationFunction::BipolarGaussian));
+                let sym = genome.add_node(CppnNode::hidden(
+                    GeometricActivationFunction::BipolarGaussian,
+                ));
                 let inp1 = inputs[d * 2];
                 let inp2 = inputs[d * 2 + 1];
                 genome.add_link(inp1, sym, self.link_weight_range.clip_weight(Weight(-w)));
@@ -320,9 +339,11 @@ impl RandomGenomeCreator {
 
             // and add the connections to the genome
             for (inp, outp) in connections {
-                genome.add_link(inputs[inp],
-                                outputs[outp],
-                                self.start_link_weight_range.random_weight(rng));
+                genome.add_link(
+                    inputs[inp],
+                    outputs[outp],
+                    self.start_link_weight_range.random_weight(rng),
+                );
             }
         }
 
@@ -350,14 +371,16 @@ pub struct Reproduction {
 
 impl Reproduction {
     fn random_hidden_node<R>(&self, rng: &mut R) -> CppnNode<GeometricActivationFunction>
-        where R: Rng
+    where
+        R: Rng,
     {
         let af = *rng.choose(&self.activation_functions).unwrap();
         CppnNode::hidden(af)
     }
 
     pub fn mate<R>(&self, rng: &mut R, parent1: &G, parent2: &G, offspring_iteration: usize) -> G
-        where R: Rng
+    where
+        R: Rng,
     {
         let mut offspring = parent1.fork(offspring_iteration);
 
@@ -378,31 +401,35 @@ impl Reproduction {
                 }
                 MatingMethod::MutateModifyNode => {
                     let hidden_node = self.random_hidden_node(rng);
-                    offspring.mutate_modify_node(hidden_node,
-                                                 self.mutate_modify_node_tournament_k,
-                                                 rng)
+                    offspring.mutate_modify_node(
+                        hidden_node,
+                        self.mutate_modify_node_tournament_k,
+                        rng,
+                    )
                 }
                 MatingMethod::MutateConnect => {
-                    let link_weight =
-                        self.link_weight_range
-                            .clip_weight(Weight(gaussian(self.link_weight_creation_sigma, rng)));
+                    let link_weight = self
+                        .link_weight_range
+                        .clip_weight(Weight(gaussian(self.link_weight_creation_sigma, rng)));
                     offspring.mutate_connect(link_weight, rng)
                 }
                 MatingMethod::MutateDisconnect => offspring.mutate_disconnect(rng),
                 MatingMethod::MutateSymmetricJoin => offspring.mutate_symmetric_join(rng),
                 MatingMethod::MutateSymmetricFork => offspring.mutate_symmetric_fork(rng),
                 MatingMethod::MutateSymmetricConnect => {
-                    let link_weight =
-                        self.link_weight_range
-                            .clip_weight(Weight(gaussian(self.link_weight_creation_sigma, rng)));
+                    let link_weight = self
+                        .link_weight_range
+                        .clip_weight(Weight(gaussian(self.link_weight_creation_sigma, rng)));
                     offspring.mutate_symmetric_connect(link_weight, 5 /* XXX */, rng)
                 }
 
                 MatingMethod::MutateWeights => {
-                    let modifications = offspring.mutate_weights(self.mutate_element_prob,
-                                                                 &self.weight_perturbance,
-                                                                 &self.link_weight_range,
-                                                                 rng);
+                    let modifications = offspring.mutate_weights(
+                        self.mutate_element_prob,
+                        &self.weight_perturbance,
+                        &self.link_weight_range,
+                        rng,
+                    );
                     modifications != 0
                 }
                 MatingMethod::CrossoverWeights => {
@@ -427,19 +454,23 @@ pub struct Expression {
 }
 
 impl Expression {
-    pub fn express<NETBUILDER, POS, NT, GRAPH>(&self,
-                                               ind: &G,
-                                               net_builder: &mut NETBUILDER,
-                                               substrate_config: &SubstrateConfiguration<POS, NT>)
-                                               -> (Behavior, f64, Saturation)
-        where NETBUILDER: NetworkBuilder<POS = POS, NT = NT, Output = GRAPH>,
-              POS: Position
+    pub fn express<NETBUILDER, POS, NT, GRAPH>(
+        &self,
+        ind: &G,
+        net_builder: &mut NETBUILDER,
+        substrate_config: &SubstrateConfiguration<POS, NT>,
+    ) -> (Behavior, f64, Saturation)
+    where
+        NETBUILDER: NetworkBuilder<POS = POS, NT = NT, Output = GRAPH>,
+        POS: Position,
     {
         let mut cppn = Cppn::new(ind.network());
-        develop_cppn(&mut cppn,
-                     substrate_config,
-                     net_builder,
-                     self.link_expression_range)
+        develop_cppn(
+            &mut cppn,
+            substrate_config,
+            net_builder,
+            self.link_expression_range,
+        )
     }
 }
 
@@ -463,9 +494,10 @@ impl PopulationFitness {
 
             // XXX: parallelize this loop
             for j in i + 1..n {
-                let distance = population.fitness(i)
-                                         .behavior
-                                         .weighted_distance(&population.fitness(j).behavior);
+                let distance = population
+                    .fitness(i)
+                    .behavior
+                    .weighted_distance(&population.fitness(j).behavior);
                 diversity_i += distance;
                 population.fitness_mut(j).behavioral_diversity += distance;
             }
@@ -473,14 +505,14 @@ impl PopulationFitness {
             population.fitness_mut(i).behavioral_diversity = diversity_i;
         }
 
-
         // Calculate age diversity
 
         // calculate average age of population.
-        let total_age: usize = population.individuals()
-                                         .iter()
-                                         .map(|ind| ind.genome().age(current_iteration))
-                                         .fold(0, |acc, x| acc+x);
+        let total_age: usize = population
+            .individuals()
+            .iter()
+            .map(|ind| ind.genome().age(current_iteration))
+            .fold(0, |acc, x| acc + x);
         let avg_age = (total_age as f64) / n as f64;
 
         // set age_diversity
