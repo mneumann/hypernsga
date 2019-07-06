@@ -17,7 +17,7 @@ use prob::Prob;
 use network_builder::NetworkBuilder;
 use std::marker::PhantomData;
 
-pub type CppnGenome<AF> where AF: ActivationFunction = Genome<CppnNode<AF>>;
+pub type CppnGenome<AF> = Genome<CppnNode<AF>>;
 
 const CPPN_OUTPUT_LINK_WEIGHT1: usize = 0;
 const CPPN_OUTPUT_LINK_EXPRESSION: usize = 1;
