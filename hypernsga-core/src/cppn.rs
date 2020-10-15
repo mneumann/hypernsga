@@ -4,6 +4,7 @@ use crate::genome::Genome;
 use crate::mating::{MatingMethod, MatingMethodWeights};
 use crate::network_builder::NetworkBuilder;
 use crate::prob::Prob;
+use crate::saturation::Saturation;
 use crate::substrate::{Position, SubstrateConfiguration};
 use crate::weight::{gaussian, Weight, WeightPerturbanceMethod, WeightRange};
 pub use cppn::activation_function::{ActivationFunction, GeometricActivationFunction};
@@ -18,18 +19,6 @@ const CPPN_OUTPUT_LINK_WEIGHT1: usize = 0;
 const CPPN_OUTPUT_LINK_EXPRESSION: usize = 1;
 const CPPN_OUTPUT_LINK_WEIGHT2: usize = 2;
 const CPPN_OUTPUT_NODE_WEIGHT: usize = 3;
-
-pub struct Saturation {
-    pub zero: f64,
-    pub low: f64,
-    pub high: f64,
-}
-
-impl Saturation {
-    pub fn sum(&self) -> f64 {
-        self.zero + self.low + self.high
-    }
-}
 
 /// Develops a network out of the CPPN
 ///

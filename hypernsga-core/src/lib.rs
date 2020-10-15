@@ -12,5 +12,6 @@ pub mod mating;
 pub mod network_builder;
 pub mod placement;
 pub mod prob;
+pub mod saturation;
 pub mod substrate;
 pub mod weight;
