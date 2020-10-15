@@ -1,4 +1,4 @@
-pub use cppn_ext::position::{Position, Position2d, Position3d};
+pub use cppn::position::{Position, Position2d, Position3d};
 
 /// Represents a logical node set. Each node set is represented by a bit,
 /// up to 64 node sets are supported. A node can be part of up to 64

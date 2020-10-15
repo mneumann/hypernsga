@@ -1,21 +1,16 @@
-use behavioral_bitvec::BehavioralBitvec;
-pub use cppn_ext::activation_function::ActivationFunction;
-pub use cppn_ext::activation_function::GeometricActivationFunction;
-pub use cppn_ext::cppn::Cppn;
-use cppn_ext::cppn::CppnNode;
-pub use cppn_ext::cppn::CppnNodeKind;
-use fitness::{Behavior, DomainFitness, Fitness};
-use genome::Genome;
-use mating::{MatingMethod, MatingMethodWeights};
-use network_builder::NetworkBuilder;
-use nsga2::driver::Driver;
-use nsga2::population::RatedPopulation;
-use nsga2::selection::SelectNSGP;
-use prob::Prob;
+use crate::behavioral_bitvec::BehavioralBitvec;
+use crate::fitness::{Behavior, DomainFitness, Fitness};
+use crate::genome::Genome;
+use crate::mating::{MatingMethod, MatingMethodWeights};
+use crate::network_builder::NetworkBuilder;
+use crate::prob::Prob;
+use crate::substrate::{Position, SubstrateConfiguration};
+use crate::weight::{gaussian, Weight, WeightPerturbanceMethod, WeightRange};
+pub use cppn::activation_function::{ActivationFunction, GeometricActivationFunction};
+pub use cppn::cppn::{Cppn, CppnNode, CppnNodeKind};
+use nsga2::{driver::Driver, population::RatedPopulation, selection::SelectNSGP};
 use rand::Rng;
 use std::marker::PhantomData;
-use substrate::{Position, SubstrateConfiguration};
-use weight::{gaussian, Weight, WeightPerturbanceMethod, WeightRange};
 
 pub type CppnGenome<AF> = Genome<CppnNode<AF>>;
 

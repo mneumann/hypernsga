@@ -1,4 +1,4 @@
-use substrate::{Node, Position};
+use crate::substrate::{Node, Position};
 
 /// Used to construct a network (graph) `G` from a CPPN and substrate combination.
 

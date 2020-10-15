@@ -1,12 +1,7 @@
 extern crate hypernsga_core as hypernsga;
-extern crate nsga2;
-extern crate rand;
 
 #[macro_use]
 extern crate glium;
-extern crate graph_layout;
-extern crate imgui;
-extern crate time;
 
 use hypernsga::cppn::{
     ActivationFunction, CppnNodeKind, Expression, GeometricActivationFunction, PopulationFitness,

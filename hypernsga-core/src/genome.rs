@@ -1,7 +1,7 @@
+use crate::prob::Prob;
+use crate::weight::{Weight, WeightPerturbanceMethod, WeightRange};
 use acyclic_network::{Network, NodeIndex, NodeType};
-use prob::Prob;
 use rand::Rng;
-use weight::{Weight, WeightPerturbanceMethod, WeightRange};
 
 /// Genome representing a feed-forward (acyclic) network with node type `NT`.
 #[derive(Clone, Debug)]

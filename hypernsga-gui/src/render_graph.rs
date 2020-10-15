@@ -1,3 +1,4 @@
+use crate::viz_network_builder::VizNetworkBuilder;
 use glium;
 use glium::backend::glutin_backend::GlutinFacade;
 use glium::index::PrimitiveType;
@@ -6,7 +7,6 @@ use hypernsga::cppn::{Expression, G};
 use hypernsga::domain_graph::Neuron;
 use hypernsga::network_builder::NetworkBuilder;
 use hypernsga::substrate::{Position3d, SubstrateConfiguration};
-use viz_network_builder::VizNetworkBuilder;
 
 pub struct Transformation {
     pub rotate_x: f32,

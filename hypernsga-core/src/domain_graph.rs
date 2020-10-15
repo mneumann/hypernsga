@@ -1,15 +1,15 @@
 // Domain: Target graph approximation
 
+use crate::fitness::DomainFitness;
+use crate::graph::NodeLabel;
+use crate::network_builder::NetworkBuilder;
+use crate::substrate::{Node, Position};
 use closed01::Closed01;
-use fitness::DomainFitness;
-use graph::NodeLabel;
 use graph_neighbor_matching::graph::{GraphBuilder, OwnedGraph};
 use graph_neighbor_matching::NodeColorWeight;
 use graph_neighbor_matching::{ScoreNorm, SimilarityMatrix, WeightedNodeColors};
-use network_builder::NetworkBuilder;
 use std::marker::PhantomData;
 use std::str::FromStr;
-use substrate::{Node, Position};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Neuron {

@@ -6,6 +6,7 @@ license = "MIT"
 repository = "https://github.com/mneumann/hypernsga"
 description = "GUI for Hyperneat (Hyper-cube based neural network optimization using NSGA2)"
 keywords = ["evolution", "neuro", "net", "algorithm", "cppn"]
+edition = "2018"
 
 include = ["src/*.rs", "Cargo.toml"]
 

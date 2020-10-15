@@ -1,4 +1,4 @@
-use behavioral_bitvec::BehavioralBitvec;
+use crate::behavioral_bitvec::BehavioralBitvec;
 use nsga2::domination::Domination;
 use nsga2::multi_objective::MultiObjective;
 use std::cmp::Ordering;
