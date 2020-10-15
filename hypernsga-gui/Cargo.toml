@@ -10,10 +10,8 @@ keywords = ["evolution", "neuro", "net", "algorithm", "cppn"]
 include = ["src/*.rs", "Cargo.toml"]
 
 [dependencies]
-
-hypernsga = { path = ".." }
+hypernsga-core = { path = "../hypernsga-core" }
 rand = "0.3"
-
 glium = "0.14"
 imgui = "0.0.9"
 time = "0.1"

@@ -1,4 +1,4 @@
-extern crate hypernsga;
+extern crate hypernsga_core as hypernsga;
 extern crate nsga2;
 extern crate rand;
 

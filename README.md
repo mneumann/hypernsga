@@ -8,11 +8,6 @@ Evolutionary Hyper-cube based neural net optimization using NSGA2 (Non Dominated
 
 ![HyperNSGA screenshot](/doc/screenshot.png?raw=true "hypernsga")
 
-## Installation
-
-Requires Rust >= 1.9.0
-
-
 ## Running
 
 ```
